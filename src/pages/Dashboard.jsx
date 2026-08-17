@@ -92,7 +92,8 @@ export default function Dashboard() {
 
   // Sort recent alerts correctly by their true timestamp
   const recentPosts = useMemo(() => {
-    return [...posts]
+    return posts
+      .filter(p => p.status !== 'resolved')
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
       .slice(0, 6)
   }, [posts])
@@ -243,7 +244,12 @@ export default function Dashboard() {
           </div>
           <div className="recent-list">
             {recentPosts.map((post, i) => (
-              <div key={post.id} className="recent-item" style={{ animationDelay: `${i * 60}ms` }}>
+              <div 
+                key={post.id} 
+                className="recent-item" 
+                style={{ animationDelay: `${i * 60}ms`, cursor: 'pointer' }}
+                onClick={() => window.location.href = `/feed?reviewId=${post.id}`}
+              >
                 <div className="recent-icon" style={{ color: CATEGORIES[post.category]?.color || '#4b6282' }}>
                   {CATEGORIES[post.category]?.icon || '◉'}
                 </div>

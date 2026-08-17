@@ -4,6 +4,7 @@ import fetch from 'node-fetch'
 import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
+import fs from 'fs'
 
 // Always resolve .env relative to THIS file, not the working directory
 const __filename = fileURLToPath(import.meta.url)
@@ -47,8 +48,176 @@ let systemConfig = {
 }
 
 // Citizen Portal In-Memory DB
-let citizenUsers = []
-let citizenComplaints = []
+const USERS_CSV_PATH = join(__dirname, 'users.csv')
+
+function loadCitizenUsersFromCSV() {
+  try {
+    if (!fs.existsSync(USERS_CSV_PATH)) {
+      return []
+    }
+    const fileContent = fs.readFileSync(USERS_CSV_PATH, 'utf-8').trim()
+    if (!fileContent) {
+      return []
+    }
+    const lines = fileContent.split('\n')
+    const headers = lines[0].split(',')
+    const users = []
+    
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue
+      const values = lines[i].split(',')
+      const user = {}
+      headers.forEach((header, index) => {
+        user[header] = values[index] || ''
+      })
+      users.push(user)
+    }
+    console.log(`[CSV] Loaded ${users.length} persistent users from users.csv`)
+    return users
+  } catch (err) {
+    console.error('[CSV Users Load Error]:', err.message)
+    return []
+  }
+}
+
+function saveCitizenUsersToCSV() {
+  try {
+    const headers = ['id', 'username', 'email', 'password']
+    const csvLines = [headers.join(',')]
+    for (const u of citizenUsers) {
+      const row = headers.map(header => u[header] || '')
+      csvLines.push(row.join(','))
+    }
+    fs.writeFileSync(USERS_CSV_PATH, csvLines.join('\n'), 'utf-8')
+    console.log(`[CSV] Saved ${citizenUsers.length} users to users.csv`)
+  } catch (err) {
+    console.error('[CSV Users Save Error]:', err.message)
+  }
+}
+
+let citizenUsers = loadCitizenUsersFromCSV()
+const CSV_FILE_PATH = join(__dirname, 'complaints.csv')
+
+function loadCitizenComplaintsFromCSV() {
+  try {
+    if (!fs.existsSync(CSV_FILE_PATH)) {
+      return []
+    }
+    const fileContent = fs.readFileSync(CSV_FILE_PATH, 'utf-8').trim()
+    if (!fileContent) {
+      return []
+    }
+    const lines = fileContent.split('\n')
+    const headers = lines[0].split(',')
+    const complaints = []
+    
+    for (let i = 1; i < lines.length; i++) {
+      if (!lines[i].trim()) continue
+      const values = [];
+      let currentVal = '';
+      let inQuotes = false;
+      for (let c = 0; c < lines[i].length; c++) {
+        const char = lines[i][c];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          values.push(currentVal.trim());
+          currentVal = '';
+        } else {
+          currentVal += char;
+        }
+      }
+      values.push(currentVal.trim());
+
+      const complaint = {}
+      headers.forEach((header, index) => {
+        let value = values[index] || '';
+        if (value.startsWith('"') && value.endsWith('"')) {
+          value = value.slice(1, -1);
+        }
+        value = value.replace(/""/g, '"');
+
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+        else if (!isNaN(value) && value !== '') value = Number(value);
+
+        complaint[header] = value;
+      })
+      
+      // ONLY load citizen portal complaints into the active list on boot
+      if (complaint.source === 'Citizen Portal') {
+        complaint.raw = true
+        complaints.push(complaint)
+      }
+    }
+    console.log(`[CSV] Loaded ${complaints.length} persistent citizen complaints from complaints.csv`)
+    return complaints
+  } catch (err) {
+    console.error('[CSV Load Error]:', err.message)
+    return []
+  }
+}
+
+function saveAllComplaintsToCSV(posts) {
+  try {
+    const headers = [
+      'id', 'userId', 'source', 'author', 'authorName', 'text', 'timestamp',
+      'likes', 'reposts', 'replies', 'url', 'ward', 'category', 'severity',
+      'confidence', 'genuine', 'status', 'lat', 'lng', 'mla', 'mp', 'photo', 'raw'
+    ]
+    const csvLines = [headers.join(',')]
+    
+    for (const p of posts) {
+      const row = headers.map(header => {
+        let val = p[header];
+        if (val === undefined || val === null) {
+          return '';
+        }
+        let strVal = String(val).replace(/"/g, '""');
+        if (strVal.includes(',') || strVal.includes('\n') || strVal.includes('"')) {
+          return `"${strVal}"`;
+        }
+        return strVal;
+      })
+      csvLines.push(row.join(','))
+    }
+    
+    fs.writeFileSync(CSV_FILE_PATH, csvLines.join('\n'), 'utf-8')
+    console.log(`[CSV] Saved ${posts.length} combined complaints to complaints.csv`)
+  } catch (err) {
+    console.error('[CSV Save Error]:', err.message)
+  }
+}
+
+function saveCurrentFeedToCSV() {
+  const liveReddit = cache.reddit.data.filter(p => p.raw === true)
+  const liveNews = cache.news.data.filter(p => p.raw === true)
+  const liveBluesky = cache.bluesky.data.filter(p => p.raw === true)
+
+  const combined = [
+    ...liveReddit,
+    ...liveNews,
+    ...liveBluesky,
+    ...citizenComplaints
+  ].map(p => {
+    if (!p.lat || !p.mla) {
+      const cleanWard = p.ward?.split('–')[1]?.trim() || p.ward || 'Bengaluru';
+      const wData = WARD_MAPPING[cleanWard] || WARD_MAPPING['Bengaluru'];
+      p.lat = wData.lat + (Math.random() - 0.5) * 0.015;
+      p.lng = wData.lng + (Math.random() - 0.5) * 0.015;
+      p.mla = wData.mla;
+      p.mp = wData.mp;
+    }
+    return p;
+  }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+
+  const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000)
+  const combinedFiltered = combined.filter(p => !p.timestamp || new Date(p.timestamp).getTime() >= threeMonthsAgo)
+
+  saveAllComplaintsToCSV(combinedFiltered)
+}
+
+let citizenComplaints = loadCitizenComplaintsFromCSV()
 let adminMessages = {} // keyed by complaintId -> array of message objects { text, timestamp, sender }
 
 // ─────────────────────────────────────────────
@@ -201,8 +370,8 @@ function classifyText(text) {
     if (score > 0) scores[rule.key] = score
   }
 
-  // Pick highest scoring category, fallback to GARBAGE (most common civic)
-  let category = 'GARBAGE'
+  // Pick highest scoring category, fallback to null (if no civic category matches)
+  let category = null
   if (Object.keys(scores).length > 0) {
     category = Object.entries(scores).sort((a, b) => b[1] - a[1])[0][0]
   }
@@ -238,8 +407,16 @@ function classifyText(text) {
                        'subscribe', 'follow me', 'link in bio', 'dm me', 'whatsapp me']
   const hasSpam = spamSignals.some(s => lower.includes(s))
   const genuine = civicMatched >= 2 && !hasSpam
+  let status = 'pending'
+  if (confidence > 80) {
+    status = 'verified'
+  } else if (confidence > 60) {
+    status = 'pending'
+  } else {
+    status = 'flagged'
+  }
 
-  return { category, severity, confidence, genuine }
+  return { category, severity, confidence, genuine, status }
 }
 
 // Hard-required civic complaint phrases — post MUST contain at least one
@@ -309,9 +486,11 @@ const NON_CIVIC_EXCLUSIONS = [
   // Miscellaneous
   'lost and found', 'lost my', 'found a', 'matrimony', 'marriage',
   'relationship', 'breakup', 'mental health', 'depression',
+  'beagle', 'lost dog', 'lost cat', 'found dog', 'found cat', 'adopt dog', 'adopt cat',
+  'stray dog rescue', 'animal rescue', 'pet shelter',
 ]
 
-function isCivicRelated(text) {
+function isCivicRelated(text, isNews = false) {
   const lower = text.toLowerCase()
 
   // Step 1: Reject immediately if it matches non-civic exclusions
@@ -321,6 +500,11 @@ function isCivicRelated(text) {
   // Step 2: Must contain at least ONE specific civic issue phrase
   const hasCivicIssue = CIVIC_ISSUE_PHRASES.some(phrase => lower.includes(phrase))
   if (!hasCivicIssue) return false
+
+  if (isNews) {
+    // For news headlines, matching a category phrase is enough
+    return true
+  }
 
   // Step 3: Require complaint/problem context words (not just mentioning a civic word)
   const COMPLAINT_CONTEXT = [
@@ -406,7 +590,7 @@ function parseRedditRSS(xmlText, sub) {
       if (!isCivicRelated(fullText)) continue
 
       const classification = classifyText(fullText)
-      if (classification.confidence < 50) continue
+      if (!classification.category || classification.confidence < 50) continue
 
       entries.push({
         id: `RD-${id}`,
@@ -421,7 +605,6 @@ function parseRedditRSS(xmlText, sub) {
         url,
         ward: extractWard(fullText),
         ...classification,
-        status: 'pending',
         raw: true,
         subreddit: sub
       })
@@ -433,6 +616,7 @@ function parseRedditRSS(xmlText, sub) {
 function parseRedditNewsRSS(xmlText, sub) {
   const entries = []
   const itemRegex = /<item>([\s\S]*?)<\/item>/g
+  const seenTitles = new Set()
   let match
   
   while ((match = itemRegex.exec(xmlText)) !== null) {
@@ -444,7 +628,10 @@ function parseRedditNewsRSS(xmlText, sub) {
 
     if (titleMatch && linkMatch) {
       let titleRaw = decodeEntities(titleMatch[1])
-      const titleClean = titleRaw.replace(/\s*-\s*Reddit\s*$/, '').replace(/\s*-\s*r\/[a-zA-Z0-9_]+\s*$/, '')
+      const titleClean = titleRaw.replace(/\s*-\s*Reddit\s*$/, '').replace(/\s*-\s*r\/[a-zA-Z0-9_]+\s*$/, '').trim()
+      
+      if (seenTitles.has(titleClean.toLowerCase())) continue
+      seenTitles.add(titleClean.toLowerCase())
       
       const url = linkMatch[1]
       const timestamp = pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString()
@@ -452,8 +639,10 @@ function parseRedditNewsRSS(xmlText, sub) {
       const idMatch = url.match(/\/comments\/([a-zA-Z0-9]+)/)
       const id = idMatch ? idMatch[1] : Math.random().toString(36).slice(2, 8)
       
+      if (!isCivicRelated(titleClean)) continue
+
       const classification = classifyText(titleClean)
-      if (classification.confidence < 40) continue
+      if (!classification.category || classification.confidence < 40) continue
 
       entries.push({
         id: `RD-${id}`,
@@ -468,7 +657,6 @@ function parseRedditNewsRSS(xmlText, sub) {
         url,
         ward: extractWard(titleClean),
         ...classification,
-        status: 'pending',
         raw: true,
         subreddit: sub
       })
@@ -505,7 +693,7 @@ async function fetchRedditPosts() {
 
     // 2. Fallback to Google News RSS search mirror for Reddit posts
     try {
-      const url = `https://news.google.com/rss/search?q=site:reddit.com/r/${sub}+potholes+OR+garbage+OR+water+OR+bbmp+OR+road+OR+sewage+OR+bescom+when:7d&hl=en-IN&gl=IN&ceid=IN:en`
+      const url = `https://news.google.com/rss/search?q=site:reddit.com/r/${sub}+(potholes+OR+garbage+OR+water+OR+bbmp+OR+road+OR+sewage+OR+bescom)+when:3m&hl=en-IN&gl=IN&ceid=IN:en`
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
@@ -536,101 +724,29 @@ async function fetchRedditPosts() {
 
 
 
-function getSimulatedRedditPosts() {
-  console.log('[Reddit] Generating simulated Reddit posts...')
-  const now = Date.now()
-  const threads = [
-    {
-      title: 'Deep craters on Outer Ring Road near Hebbal flyover',
-      body: 'Driving to office today was a nightmare. The road has collapsed in multiple spots near Hebbal. Big craters are forming. Please drive slow, guys.',
-      category: 'POTHOLE',
-      ward: 'Hebbal',
-      author: 'u/hebbal_rider',
-      likes: 145,
-      replies: 42
-    },
-    {
-      title: 'Water logging / sewage overflow near Whitefield main road',
-      body: 'Yesterday night rain has completely flooded the street. Drainage is choked with plastic waste and black sewage water is overflowing onto the footpaths.',
-      category: 'SEWAGE',
-      ward: 'Whitefield',
-      author: 'u/whitefield_techie',
-      likes: 210,
-      replies: 67
-    },
-    {
-      title: 'Unbearable noise pollution near Rajajinagar late night',
-      body: 'Local marriage hall is playing loud music on loudspeakers way past midnight. High noise levels are keeping children and senior citizens awake.',
-      category: 'NOISE',
-      ward: 'Rajajinagar',
-      author: 'u/rajaji_resident',
-      likes: 67,
-      replies: 19
-    },
-    {
-      title: 'No water supply in JP Nagar for the 3rd consecutive day',
-      body: 'Is anyone else in JP Nagar facing water cut? BWSSB pipelines seem to have some maintenance work but there was no prior notice given.',
-      category: 'WATER',
-      ward: 'JP Nagar',
-      author: 'u/jp_nagar_native',
-      likes: 98,
-      replies: 31
-    },
-    {
-      title: 'Piles of wet waste dumping in empty plot at Koramangala',
-      body: 'Some commercial shops are illegally dumping garbage bags in the vacant plot next to 1st block park. BBMP should penalize them.',
-      category: 'GARBAGE',
-      ward: 'Koramangala',
-      author: 'u/kora_clean',
-      likes: 112,
-      replies: 24
-    },
-    {
-      title: 'Bescom transformer sparks and streetlights off near Electronic City',
-      body: 'The streetlights are off near phase 1 toll gate and the transformer is sparking. Looks like a serious short circuit risk.',
-      category: 'STREETLIGHT',
-      ward: 'Electronic City',
-      author: 'u/ecity_developer',
-      likes: 130,
-      replies: 28
-    }
-  ]
+const WARD_MAPPING = {
+  'Koramangala': { mla: 'Ramalinga Reddy (INC)', mp: 'Tejasvi Surya (BJP)', lat: 12.9352, lng: 77.6244 },
+  'Indiranagar': { mla: 'S. Raghu (BJP)', mp: 'P. C. Mohan (BJP)', lat: 12.9719, lng: 77.6412 },
+  'Jayanagar': { mla: 'C. K. Ramamurthy (BJP)', mp: 'Tejasvi Surya (BJP)', lat: 12.9308, lng: 77.5838 },
+  'Whitefield': { mla: 'Manjula S. (BJP)', mp: 'P. C. Mohan (BJP)', lat: 12.9698, lng: 77.7499 },
+  'HSR Layout': { mla: 'Satish Reddy (BJP)', mp: 'Tejasvi Surya (BJP)', lat: 12.9128, lng: 77.6388 },
+  'Rajajinagar': { mla: 'S. Suresh Kumar (BJP)', mp: 'Shobha Karandlaje (BJP)', lat: 12.9882, lng: 77.5533 },
+  'Hebbal': { mla: 'Byrathi Suresh (INC)', mp: 'Shobha Karandlaje (BJP)', lat: 13.0358, lng: 77.5970 },
+  'MG Road': { mla: 'N. A. Haris (INC)', mp: 'P. C. Mohan (BJP)', lat: 12.9756, lng: 77.6068 },
+  'JP Nagar': { mla: 'M. Krishnappa (BJP)', mp: 'Tejasvi Surya (BJP)', lat: 12.9063, lng: 77.5857 },
+  'Electronic City': { mla: 'M. Krishnappa (BJP)', mp: 'Tejasvi Surya (BJP)', lat: 12.8452, lng: 77.6602 },
+  'Bengaluru': { mla: 'Dinesh Gundu Rao (INC)', mp: 'P. C. Mohan (BJP)', lat: 12.9716, lng: 77.5946 }
+};
 
-  return threads.map((p, idx) => {
-    const ageHours = idx * 3 + 2
-    const fullText = `${p.title} — ${p.body}`
-    const classification = classifyText(fullText)
-    return {
-      id: `RD-SIM-${now.toString().slice(-6)}-${idx}`,
-      source: `Reddit r/bangalore`,
-      author: p.author,
-      authorName: p.author,
-      text: fullText,
-      timestamp: new Date(now - ageHours * 3600000).toISOString(),
-      likes: p.likes,
-      reposts: 0,
-      replies: p.replies,
-      url: [
-        'https://www.reddit.com/r/bangalore/comments/v3pvhb/sarjapur_road_potholes_are_massive/',
-        'https://www.reddit.com/r/bangalore/comments/1b6l7u2/water_crisis_in_bangalore/',
-        'https://www.reddit.com/r/bangalore/comments/xpy7p4/sarjapur_road_is_death_trap_now_bbmp_sleeping/',
-        'https://www.reddit.com/r/bangalore/comments/v3pvhb/sarjapur_road_potholes_are_massive/',
-        'https://www.reddit.com/r/bangalore/comments/1b6l7u2/water_crisis_in_bangalore/',
-        'https://www.reddit.com/r/bangalore/comments/xpy7p4/sarjapur_road_is_death_trap_now_bbmp_sleeping/'
-      ][idx % 6],
-      ward: p.ward,
-      ...classification,
-      status: 'pending',
-      raw: false
-    }
-  })
-}
+
+
+
 
 
 
 async function fetchNewsPosts() {
   try {
-    const url = 'https://news.google.com/rss/search?q=bangalore+potholes+OR+garbage+OR+water+OR+bbmp+when:7d&hl=en-IN&gl=IN&ceid=IN:en'
+    const url = 'https://news.google.com/rss/search?q=bangalore+potholes+OR+bangalore+garbage+OR+bangalore+water+OR+bangalore+bbmp+OR+bangalore+sewage+OR+bangalore+streetlight&hl=en-IN&gl=IN&ceid=IN:en'
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
@@ -665,8 +781,10 @@ async function fetchNewsPosts() {
         const url = linkMatch[1]
         const timestamp = pubDateMatch ? new Date(pubDateMatch[1]).toISOString() : new Date().toISOString()
         
+        if (!isCivicRelated(title, true)) continue
+
         const classification = classifyText(title)
-        if (classification.confidence < 40) continue
+        if (!classification.category || classification.confidence < 40) continue
 
         entries.push({
           id: `NW-${Math.random().toString(36).slice(2, 8)}`,
@@ -681,7 +799,6 @@ async function fetchNewsPosts() {
           url,
           ward: extractWard(title),
           ...classification,
-          status: 'pending',
           raw: true
         })
       }
@@ -693,6 +810,8 @@ async function fetchNewsPosts() {
     return []
   }
 }
+
+
 
 async function fetchBlueskyPosts() {
   console.log('[Bluesky] Fetching fresh data...')
@@ -739,13 +858,12 @@ async function fetchBlueskyPosts() {
         url: `https://bsky.app/profile/${authorHandle}/post/${post.uri?.split('/').pop()}`,
         ward: extractWard(text),
         ...classification,
-        status: 'pending',
         raw: true
       }
     }).filter(p => {
       if (seen.has(p.id)) return false
       seen.add(p.id)
-      return isCivicRelated(p.text)
+      return isCivicRelated(p.text) && p.category !== null
     })
     
     console.log(`[Bluesky] Parsed ${parsed.length} live posts`)
@@ -781,22 +899,24 @@ async function updateRedditCache() {
   try {
     const newPosts = await fetchRedditPosts()
     const liveNewPosts = newPosts.filter(p => p.raw === true)
-    if (liveNewPosts.length > 0) {
-      const existing = cache.reddit.data.filter(p => p.raw === true)
-      const merged = [...liveNewPosts, ...existing]
-      const seen = new Set()
-      cache.reddit.data = merged.filter(p => {
-        if (seen.has(p.id)) return false
-        seen.add(p.id)
-        return true
-      }).slice(0, 100)
-    }
+    const existing = cache.reddit.data
+    const merged = [...liveNewPosts, ...existing]
+    const seenIds = new Set()
+    const seenTexts = new Set()
+    cache.reddit.data = merged.filter(p => {
+      if (seenIds.has(p.id)) return false
+      seenIds.add(p.id)
+
+      const textKey = p.text.toLowerCase().trim()
+      if (seenTexts.has(textKey)) return false
+      seenTexts.add(textKey)
+
+      return true
+    }).slice(0, 100)
   } catch (err) {
     console.error('[Reddit Cache Update Failed]:', err.message)
   }
 }
-
-
 
 async function updateNewsCache() {
   try {
@@ -805,10 +925,16 @@ async function updateNewsCache() {
     if (liveNewPosts.length > 0) {
       const existing = cache.news.data.filter(p => p.raw === true)
       const merged = [...liveNewPosts, ...existing]
-      const seen = new Set()
+      const seenIds = new Set()
+      const seenTexts = new Set()
       cache.news.data = merged.filter(p => {
-        if (seen.has(p.id)) return false
-        seen.add(p.id)
+        if (seenIds.has(p.id)) return false
+        seenIds.add(p.id)
+
+        const textKey = p.text.toLowerCase().trim()
+        if (seenTexts.has(textKey)) return false
+        seenTexts.add(textKey)
+
         return true
       }).slice(0, 100)
     }
@@ -816,6 +942,10 @@ async function updateNewsCache() {
     console.error('[News Cache Update Failed]:', err.message)
   }
 }
+
+
+
+
 
 
 // ─────────────────────────────────────────────
@@ -881,6 +1011,8 @@ app.get('/api/feed', async (req, res) => {
       })())
     }
 
+
+
     // Refresh News if cache expired and enabled
     if (systemConfig.sources['News Reports'] && (forceRefresh || now - cache.news.lastFetch > CACHE_TTL)) {
       refreshTasks.push((async () => {
@@ -910,17 +1042,33 @@ app.get('/api/feed', async (req, res) => {
       ...liveNews,
       ...liveBluesky,
       ...citizenComplaints
-    ].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+    ].map(p => {
+      if (!p.lat || !p.mla) {
+        const cleanWard = p.ward?.split('–')[1]?.trim() || p.ward || 'Bengaluru';
+        const wData = WARD_MAPPING[cleanWard] || WARD_MAPPING['Bengaluru'];
+        p.lat = wData.lat + (Math.random() - 0.5) * 0.015;
+        p.lng = wData.lng + (Math.random() - 0.5) * 0.015;
+        p.mla = wData.mla;
+        p.mp = wData.mp;
+      }
+      return p;
+    }).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+
+    const threeMonthsAgo = Date.now() - (90 * 24 * 60 * 60 * 1000)
+    const combinedFiltered = combined.filter(p => !p.timestamp || new Date(p.timestamp).getTime() >= threeMonthsAgo)
+
+    saveAllComplaintsToCSV(combinedFiltered)
 
     res.json({
       success: true,
-      total: combined.length,
-      reddit: liveReddit.length,
-      news: liveNews.length,
-      bluesky: liveBluesky.length,
+      total: combinedFiltered.length,
+      reddit: combinedFiltered.filter(p => p.source.startsWith('Reddit')).length,
+      news: combinedFiltered.filter(p => p.source === 'News Reports').length,
+      bluesky: combinedFiltered.filter(p => p.source === 'Bluesky').length,
+      citizen: combinedFiltered.filter(p => p.source === 'Citizen Portal').length,
       lastUpdated: new Date().toISOString(),
       nextRefresh: new Date(Math.min(cache.reddit.lastFetch, cache.news.lastFetch, cache.bluesky.lastFetch) + CACHE_TTL).toISOString(),
-      posts: combined
+      posts: combinedFiltered
     })
 
   } catch (err) {
@@ -1013,6 +1161,7 @@ app.post('/api/citizen/register', (req, res) => {
     email
   }
   citizenUsers.push(newUser)
+  saveCitizenUsersToCSV()
   res.json({ success: true, user: { id: newUser.id, username: newUser.username, email: newUser.email } })
 })
 
@@ -1064,6 +1213,7 @@ app.post('/api/citizen/complaints', (req, res) => {
   }
   
   citizenComplaints.push(newComplaint)
+  saveCurrentFeedToCSV()
   res.json({ success: true, complaint: newComplaint })
 })
 
@@ -1107,6 +1257,7 @@ app.post('/api/feed/message', (req, res) => {
   const post = citizenComplaints.find(c => c.id === complaintId)
   if (post) {
     post.replies += 1
+    saveCurrentFeedToCSV()
   } else {
     // If not in citizenComplaints, look in cached social streams
     for (const bucket of Object.values(cache)) {
@@ -1131,6 +1282,7 @@ app.post('/api/feed/status', (req, res) => {
   const citizenPost = citizenComplaints.find(c => c.id === postId)
   if (citizenPost) {
     citizenPost.status = status
+    saveCurrentFeedToCSV()
   }
   
   // Also update in caches so current feed fetch reflects it
@@ -1144,10 +1296,49 @@ app.post('/api/feed/status', (req, res) => {
   res.json({ success: true, message: 'Status updated successfully' })
 })
 
+// Simulate Alarm Post Injection
+app.post('/api/feed/simulate', (req, res) => {
+  const { category, ward, severity } = req.body
+  const id = `SIM-${Math.floor(1000 + Math.random() * 9000)}`
+  
+  const cleanWard = ward.split('–')[1]?.trim() || ward
+  const wData = WARD_MAPPING[cleanWard] || WARD_MAPPING['Bengaluru']
+  
+  const newPost = {
+    id,
+    source: 'Mock Stream',
+    author: 'u/mock_crawled_user',
+    authorName: 'Mock Crawler',
+    text: `🚨 Simulated Alert: ${category.toLowerCase()} problem reported in ${ward}. Urgent action required.`,
+    timestamp: new Date().toISOString(),
+    likes: Math.floor(10 + Math.random() * 90),
+    reposts: 0,
+    replies: 0,
+    url: 'https://www.reddit.com/r/bangalore',
+    ward: ward,
+    category: category,
+    severity: severity || 'high',
+    confidence: 95,
+    genuine: true,
+    status: 'pending',
+    raw: true,
+    lat: wData.lat + (Math.random() - 0.5) * 0.015,
+    lng: wData.lng + (Math.random() - 0.5) * 0.015,
+    mla: wData.mla,
+    mp: wData.mp
+  }
+  
+  cache.reddit.data.unshift(newPost)
+  res.json({ success: true, post: newPost })
+})
+
 // ─────────────────────────────────────────────
 //  Start server
 // ─────────────────────────────────────────────
 app.listen(PORT, () => {
+  // Initialize with empty cache (will crawl real data on request)
+  cache.reddit.data = []
+
   console.log(`\n╔═══════════════════════════════════════╗`)
   console.log(`║      UrbanIntel Backend v1.0          ║`)
   console.log(`║      Running on port ${PORT}             ║`)

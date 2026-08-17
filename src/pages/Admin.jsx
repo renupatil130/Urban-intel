@@ -99,32 +99,44 @@ export default function Admin() {
   }, [livePosts, audioEnabled])
 
   // Simulation handler
-  const handleSimulateAlert = () => {
+  const handleSimulateAlert = async () => {
     const mockCategories = ['POTHOLE', 'GARBAGE', 'WATER', 'STREETLIGHT']
     const mockWards = ['Koramangala', 'Indiranagar', 'HSR Layout', 'Whitefield']
     const selectedCategory = mockCategories[Math.floor(Math.random() * mockCategories.length)]
     const selectedWard = mockWards[Math.floor(Math.random() * mockWards.length)]
-    const toastId = Math.random().toString(36).substring(2, 9)
+    const severity = Math.random() > 0.5 ? 'critical' : 'high'
 
-    // Show simulation toast
-    setToasts(prev => [...prev, {
-      id: toastId,
-      postId: `SIM-${Math.floor(1000 + Math.random() * 9000)}`,
-      title: `Simulated ${selectedCategory} Alert`,
-      text: `Urgent attention required: ${selectedCategory.toLowerCase()} reported in ${selectedWard}.`,
-      severity: Math.random() > 0.5 ? 'critical' : 'high',
-      source: 'Mock Stream',
-      ward: selectedWard
-    }])
+    try {
+      const res = await fetch(`${API_BASE}/api/feed/simulate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: selectedCategory, ward: selectedWard, severity })
+      })
+      const data = await res.json()
+      if (data.success) {
+        const toastId = Math.random().toString(36).substring(2, 9)
+        setToasts(prev => [...prev, {
+          id: toastId,
+          postId: data.post.id,
+          title: `Simulated ${selectedCategory} Alert`,
+          text: data.post.text,
+          severity: data.post.severity,
+          source: data.post.source,
+          ward: data.post.ward
+        }])
+        
+        // Auto remove simulation toast
+        setTimeout(() => {
+          setToasts(prev => prev.filter(t => t.id !== toastId))
+        }, 5000)
 
-    // Auto remove simulation toast
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== toastId))
-    }, 5000)
-
-    // Play sound
-    if (audioEnabled) {
-      playChimeSound()
+        // Play sound
+        if (audioEnabled) {
+          playChimeSound()
+        }
+      }
+    } catch (err) {
+      console.error('Simulation request failed:', err)
     }
   }
 
@@ -392,7 +404,7 @@ export default function Admin() {
             </div>
             <div className="alert-toast-meta">
               <span>{toast.source} · {toast.ward}</span>
-              <a href="/feed" className="alert-toast-action">Review →</a>
+              <a href={`/feed?reviewId=${toast.postId}`} className="alert-toast-action">Review →</a>
             </div>
           </div>
         ))}

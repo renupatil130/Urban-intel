@@ -36,11 +36,11 @@ export default function CitizenPortal() {
   const [submitError, setSubmitError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // Google Map States & bindings
+  // Leaflet Map States & bindings
   const mapRef = useRef(null)
-  const [googleMap, setGoogleMap] = useState(null)
-  const [mapMarker, setMapMarker] = useState(null)
-  const googleScriptLoaded = useRef(false)
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const mapInstanceRef = useRef(null)
+  const markerRef = useRef(null)
 
   const WARD_COORDINATES = useMemo(() => ({
     'Ward 12 – Koramangala': { lat: 12.9352, lng: 77.6244 },
@@ -53,100 +53,111 @@ export default function CitizenPortal() {
     'Ward 8 – MG Road': { lat: 12.9756, lng: 77.6068 }
   }), [])
 
-  // Load Google Maps script
+  // Load Leaflet resources dynamically
   useEffect(() => {
-    if (googleScriptLoaded.current) return
-    googleScriptLoaded.current = true
-
-    if (window.google && window.google.maps) {
+    if (window.L) {
+      setMapLoaded(true)
       return
     }
 
-    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || ''
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+    document.head.appendChild(link)
+
     const script = document.createElement('script')
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`
-    script.async = true
-    script.defer = true
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
     script.onload = () => {
-      if (user) initGoogleMap()
-    }
-    script.onerror = () => {
-      console.error('Failed to load Google Maps script')
+      setMapLoaded(true)
     }
     document.head.appendChild(script)
-  }, [user])
+  }, [])
 
-  // Lazy initialize map when user logs in and ref container renders
+  // Lazy initialize map when user logs in and container renders
   useEffect(() => {
-    if (user && window.google && window.google.maps && !googleMap) {
+    if (user && mapLoaded && !mapInstanceRef.current) {
       const t = setTimeout(() => {
-        initGoogleMap()
+        initLeafletMap()
       }, 100)
       return () => clearTimeout(t)
     }
-  }, [user, googleMap])
+  }, [user, mapLoaded])
 
   // Sync ward dropdown selection to map marker
   useEffect(() => {
-    if (!googleMap || !mapMarker) return
+    if (!mapInstanceRef.current || !markerRef.current) return
     const coords = WARD_COORDINATES[ward]
     if (coords) {
-      const latLng = new window.google.maps.LatLng(coords.lat, coords.lng)
-      mapMarker.setPosition(latLng)
-      googleMap.panTo(latLng)
+      markerRef.current.setLatLng([coords.lat, coords.lng])
+      mapInstanceRef.current.panTo([coords.lat, coords.lng])
     }
-  }, [ward, googleMap, mapMarker])
+  }, [ward])
 
-  const initGoogleMap = () => {
-    if (!mapRef.current) return
-    if (!window.google || !window.google.maps) return
+  const initLeafletMap = () => {
+    if (!mapRef.current || !window.L) return
+    const L = window.L
     const defaultCoords = WARD_COORDINATES[ward] || WARD_COORDINATES['Ward 12 – Koramangala']
     
+    // Check if container already initialized
+    const mapEl = mapRef.current
+    if (mapEl && mapEl._leaflet_id) return
+
     try {
-      const mapObj = new window.google.maps.Map(mapRef.current, {
-        center: defaultCoords,
-        zoom: 12,
-        styles: [
-          { elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-          { elementType: 'labels.text.stroke', stylers: [{ color: '#0f172a' }] },
-          { elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-          { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
-          { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#cbd5e1' }] },
-          { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#334155' }] },
-          { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1e293b' }] },
-          { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
-          { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0f172a' }] }
-        ],
-        disableDefaultUI: true,
-        zoomControl: true
+      const map = L.map(mapRef.current, {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([defaultCoords.lat, defaultCoords.lng], 13)
+
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        maxZoom: 20
+      }).addTo(map)
+
+      L.control.zoom({ position: 'bottomright' }).addTo(map)
+
+      const color = '#38bdf8'
+      const pinIcon = L.divIcon({
+        className: 'custom-pin-icon',
+        html: `<div style="
+          background: ${color};
+          width: 24px;
+          height: 24px;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid #fff;
+          box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+        ">
+          <span style="transform: rotate(45deg); font-size: 10px;">📍</span>
+        </div>`,
+        iconSize: [24, 24],
+        iconAnchor: [12, 24]
       })
 
-      const markerObj = new window.google.maps.Marker({
-        position: defaultCoords,
-        map: mapObj,
+      const marker = L.marker([defaultCoords.lat, defaultCoords.lng], {
         draggable: true,
-        title: 'Drag to select location'
-      })
+        icon: pinIcon
+      }).addTo(map)
 
-      setGoogleMap(mapObj)
-      setMapMarker(markerObj)
+      mapInstanceRef.current = map
+      markerRef.current = marker
 
-      // Click listener
-      mapObj.addListener('click', (e) => {
-        const lat = e.latLng.lat()
-        const lng = e.latLng.lng()
-        markerObj.setPosition(e.latLng)
+      // Map click handler
+      map.on('click', (e) => {
+        const { lat, lng } = e.latlng
+        marker.setLatLng(e.latlng)
         updateWardFromCoords(lat, lng)
       })
 
-      // Drag listener
-      markerObj.addListener('dragend', (e) => {
-        const lat = e.latLng.lat()
-        const lng = e.latLng.lng()
+      // Marker drag handler
+      marker.on('dragend', (e) => {
+        const { lat, lng } = e.target.getLatLng()
         updateWardFromCoords(lat, lng)
       })
+
     } catch (err) {
-      console.error('Error initializing Google Maps:', err)
+      console.error('Error initializing Leaflet map:', err)
     }
   }
 
@@ -344,6 +355,9 @@ export default function CitizenPortal() {
     }
   }
 
+  const activeComplaints = useMemo(() => complaints.filter(c => c.status !== 'resolved'), [complaints])
+  const resolvedComplaints = useMemo(() => complaints.filter(c => c.status === 'resolved'), [complaints])
+
   const activeComplaint = complaints.find(c => c.id === activeComplaintId)
 
   // Auth Panel Layout
@@ -458,7 +472,7 @@ export default function CitizenPortal() {
                 />
               </div>
               <div className="form-group">
-                <label>Select Location on Google Maps</label>
+                <label>Select Location on Map</label>
                 <div className="map-selector-container" style={{ display: 'block', padding: '0px' }}>
                   <div ref={mapRef} style={{ width: '100%', height: '260px', borderRadius: '8px' }} />
                   <div className="map-help-text" style={{ padding: '8px 12px', background: '#0b0f19', borderBottomLeftRadius: '8px', borderBottomRightRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -541,14 +555,13 @@ export default function CitizenPortal() {
             <h3>My Active Reports</h3>
             {loadingComplaints && complaints.length === 0 ? (
               <p className="loading-txt">Retrieving reports...</p>
-            ) : complaints.length === 0 ? (
+            ) : activeComplaints.length === 0 ? (
               <div className="empty-reports-view">
-                <p>No complaints submitted yet.</p>
-                <p style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '0.2rem' }}>Use the form on the left to report your first issue.</p>
+                <p>No active complaints at the moment.</p>
               </div>
             ) : (
               <div className="portal-complaints-list">
-                {complaints.map(c => {
+                {activeComplaints.map(c => {
                   const catInfo = CATEGORIES[c.category] || CATEGORIES['POTHOLE']
                   const isExpanded = c.id === activeComplaintId
                   const msgCount = c.messages?.length || 0
@@ -580,6 +593,44 @@ export default function CitizenPortal() {
               </div>
             )}
           </div>
+
+          {resolvedComplaints.length > 0 && (
+            <div className="portal-card" style={{ marginTop: '20px' }}>
+              <h3>Resolved History</h3>
+              <div className="portal-complaints-list">
+                {resolvedComplaints.map(c => {
+                  const catInfo = CATEGORIES[c.category] || CATEGORIES['POTHOLE']
+                  const isExpanded = c.id === activeComplaintId
+                  const msgCount = c.messages?.length || 0
+                  
+                  return (
+                    <div 
+                      key={c.id} 
+                      className={`citizen-complaint-card resolved ${isExpanded ? 'active' : ''}`}
+                      onClick={() => setActiveComplaintId(isExpanded ? null : c.id)}
+                      style={{ opacity: 0.75 }}
+                    >
+                      <div className="card-top">
+                        <span className="complaint-id">{c.id}</span>
+                        <span className={`badge ${c.status}`}>{c.status}</span>
+                      </div>
+                      <h4 className="complaint-text">{c.text.split(' — ')[0]}</h4>
+                      <p className="complaint-subtext">{c.text.split(' — ')[1]?.slice(0, 80)}...</p>
+                      
+                      <div className="card-meta">
+                        <span>{catInfo.icon} {c.ward.split('–')[1]?.trim() || c.ward}</span>
+                        {msgCount > 0 && (
+                          <span className="chat-notification-indicator">
+                            ✉ {msgCount} update{msgCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Messages Drawer */}
           {activeComplaintId && activeComplaint && (

@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useFeed } from '../hooks/useFeed'
 import { generatePosts, CATEGORIES } from '../data/mockData'
 import './LiveFeed.css'
@@ -9,6 +10,7 @@ function getSourceIcon(source) {
   if (source?.startsWith('Reddit')) return '🔴'
   if (source?.startsWith('News')) return '📰'
   if (source?.startsWith('Bluesky')) return '🦋'
+  if (source?.startsWith('Citizen')) return '📱'
   return '📢'
 }
 
@@ -16,6 +18,7 @@ function getSourceColor(source) {
   if (source?.startsWith('Reddit')) return '#ff4500'
   if (source?.startsWith('News')) return '#10b981'
   if (source?.startsWith('Bluesky')) return '#0085ff'
+  if (source?.startsWith('Citizen')) return '#a855f7' // Beautiful violet for Citizen Portal
   return 'var(--accent)'
 }
 
@@ -33,20 +36,20 @@ function PostCard({ post, onStatusChange, onReviewClick }) {
   const srcColor = getSourceColor(post.source)
 
   return (
-    <div className={`post-card ${post.severity}`}>
-      <div className="post-card-top">
-        <div className="post-meta-left">
+    <div id={`post-card-${post.id}`} className={`post-card ${post.severity}`} style={{ scrollMargin: '120px' }}>
+      <div className="post-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="post-meta-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="post-source-icon" style={{ color: srcColor }}>{getSourceIcon(post.source)}</span>
           <span className="post-source" style={{ color: srcColor }}>{post.source}</span>
           <span className="post-author">{post.author}</span>
           <span className="post-time">{timeAgo(post.timestamp)}</span>
-          {post.raw ? (
-            <span className="real-badge">LIVE</span>
-          ) : (
-            <span className="demo-badge">DEMO DATA</span>
-          )}
         </div>
-        <div className="post-meta-right">
+        <div className="post-meta-right" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {post.raw || post.source === 'Citizen Portal' ? (
+            <span className="badge verified">LIVE</span>
+          ) : (
+            <span className="badge" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)', background: 'transparent' }}>DEMO</span>
+          )}
           <span className={`badge ${post.severity}`}>{post.severity}</span>
           <span className={`badge ${post.status}`}>{post.status}</span>
         </div>
@@ -60,17 +63,26 @@ function PostCard({ post, onStatusChange, onReviewClick }) {
         </div>
       </div>
 
-      <div className="post-footer">
-        <div className="post-signals">
-          <span>♥ {post.likes}</span>
-          {post.reposts > 0 && <span>⟳ {post.reposts}</span>}
-          {post.replies > 0 && <span>💬 {post.replies}</span>}
-          <span className="post-confidence" style={{
-            color: post.confidence > 80 ? 'var(--success)' : post.confidence > 60 ? 'var(--warning)' : 'var(--danger)'
-          }}>AI: {post.confidence}%</span>
+      <div className="post-footer" style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
+          <div className="post-signals" style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <span>♥ {post.likes}</span>
+            {post.reposts > 0 && <span>⟳ {post.reposts}</span>}
+            {post.replies > 0 && <span>💬 {post.replies}</span>}
+            <span className="post-confidence" style={{
+              color: post.confidence > 80 ? 'var(--success)' : post.confidence > 60 ? 'var(--warning)' : 'var(--danger)'
+            }}>AI: {post.confidence}%</span>
+          </div>
+          <div className="post-location" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', margin: 0 }}>
+            <div><span className="loc-pin">◉</span>{post.ward}</div>
+            {post.mla && (
+              <div style={{ fontSize: '9.5px', color: '#94a3b8', fontFamily: 'var(--font-mono)' }}>
+                MLA: {post.mla.split(' (')[0]}
+              </div>
+            )}
+          </div>
         </div>
-        <div className="post-location"><span className="loc-pin">◉</span>{post.ward}</div>
-        <div className="post-actions">
+        <div className="post-actions" style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', width: '100%', marginTop: '4px' }}>
           <button
             className="post-btn review"
             onClick={() => onReviewClick(post)}
@@ -210,6 +222,42 @@ function FocusedReviewPanel({ post, onBack, onStatusChange }) {
                   />
                 </div>
               )}
+
+              {post.url && post.url !== '#' && (
+                <div className="focused-live-link-container" style={{ marginTop: '1.25rem' }}>
+                  <a 
+                    href={post.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    className="focused-live-link-btn"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      padding: '0.6rem 1rem',
+                      borderRadius: '6px',
+                      fontSize: '0.85rem',
+                      color: 'var(--accent)',
+                      textDecoration: 'none',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      transition: 'all 0.2s ease',
+                      fontWeight: '600',
+                      cursor: 'pointer'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                      e.currentTarget.style.borderColor = 'var(--accent)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                      e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    }}
+                  >
+                    🔗 View Original {post.source || 'Post'} Source
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="focused-social-stats">
@@ -247,6 +295,26 @@ function FocusedReviewPanel({ post, onBack, onStatusChange }) {
               </div>
             </div>
           </div>
+
+          {post.mla && (
+            <div className="focused-panel-block">
+              <h3 className="block-title" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                👤 Accountable Representatives
+              </h3>
+              <div className="meta-grid" style={{ gridTemplateColumns: '1fr', gap: '8px' }}>
+                <div className="meta-item" style={{ borderLeft: '3px solid var(--accent)', paddingLeft: '8px' }}>
+                  <span className="meta-lbl">MLA (Member of Legislative Assembly)</span>
+                  <span className="meta-val" style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>🏛️ {post.mla}</span>
+                </div>
+                {post.mp && (
+                  <div className="meta-item" style={{ borderLeft: '3px solid var(--success)', paddingLeft: '8px' }}>
+                    <span className="meta-lbl">MP (Member of Parliament)</span>
+                    <span className="meta-val" style={{ color: '#fff', fontSize: '13px', fontWeight: 'bold' }}>🗳️ {post.mp}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {post.source === 'Citizen Portal' && (
             <div className="focused-panel-block">
@@ -364,13 +432,24 @@ function FocusedReviewPanel({ post, onBack, onStatusChange }) {
 export default function LiveFeed() {
   const { posts: livePosts, loading, error, meta, newCount, apiStatus, refresh, dismissNew } = useFeed()
   const [statusMap,    setStatusMap]   = useState({})
-  const [focusedPostId, setFocusedPostId] = useState(null)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const reviewId = searchParams.get('reviewId') || null
+  const [focusedPostId, setFocusedPostId] = useState(reviewId)
+
+  useEffect(() => {
+    setFocusedPostId(reviewId)
+  }, [reviewId])
   const [search,       setSearch]      = useState('')
   const [filterSev,    setFilterSev]   = useState('all')
-  const [filterStat,   setFilterStat]  = useState('all')
+  const [filterStat,   setFilterStat]  = useState('unresolved')
   const [filterCat,    setFilterCat]   = useState('all')
   const [filterSrc,    setFilterSrc]   = useState('all')
   const [sortBy,       setSortBy]      = useState('time')
+  const [showNews,     setShowNews]    = useState(true)
+
+  const [mapLoaded, setMapLoaded] = useState(false)
+  const mapInstanceRef = useRef(null)
+  const markersGroupRef = useRef(null)
 
   const handleStatusChange = async (id, s) => {
     setStatusMap(p => ({ ...p, [id]: s }))
@@ -392,28 +471,204 @@ export default function LiveFeed() {
     let r = [...allPosts]
     if (search)           r = r.filter(p => p.text.toLowerCase().includes(search.toLowerCase()) || p.ward?.toLowerCase().includes(search.toLowerCase()))
     if (filterSev  !== 'all') r = r.filter(p => p.severity === filterSev)
-    if (filterStat !== 'all') r = r.filter(p => (statusMap[p.id] || p.status) === filterStat)
+    if (filterStat === 'unresolved') {
+      r = r.filter(p => (statusMap[p.id] || p.status) !== 'resolved')
+    } else if (filterStat !== 'all') {
+      r = r.filter(p => (statusMap[p.id] || p.status) === filterStat)
+    }
     if (filterCat  !== 'all') r = r.filter(p => p.category === filterCat)
-    if (filterSrc  !== 'all') r = r.filter(p => p.source === filterSrc)
+    
+    if (filterSrc !== 'all') {
+      r = r.filter(p => p.source === filterSrc)
+    } else if (!showNews) {
+      r = r.filter(p => p.source !== 'News Reports')
+    }
+
     if (sortBy === 'severity') { const o = { critical:0,high:1,medium:2,low:3 }; r.sort((a,b)=>(o[a.severity]??4)-(o[b.severity]??4)) }
     else if (sortBy === 'confidence') r.sort((a,b) => b.confidence - a.confidence)
     else r.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))
     return r
-  }, [allPosts, search, filterSev, filterStat, filterCat, filterSrc, sortBy, statusMap])
+  }, [allPosts, search, filterSev, filterStat, filterCat, filterSrc, showNews, sortBy, statusMap])
+
+  useEffect(() => {
+    if (filterSrc === 'News Reports') {
+      setShowNews(true)
+    }
+  }, [filterSrc])
+
+  // Dynamically load Leaflet assets
+  useEffect(() => {
+    if (window.L) {
+      setMapLoaded(true)
+      return
+    }
+
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+    document.head.appendChild(link)
+
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.onload = () => {
+      setMapLoaded(true)
+    }
+    document.head.appendChild(script)
+  }, [])
+
+  // Initialize Map once
+  useEffect(() => {
+    if (!mapLoaded || !window.L || focusedPostId) return
+    const L = window.L
+
+    const mapEl = document.getElementById('livefeed-leaflet-map')
+    if (mapEl && mapEl._leaflet_id) return // already initialized
+
+    const map = L.map('livefeed-leaflet-map', {
+      zoomControl: false
+    }).setView([12.9716, 77.5946], 11.5)
+
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+      subdomains: 'abcd',
+      maxZoom: 20
+    }).addTo(map)
+
+    L.control.zoom({ position: 'bottomright' }).addTo(map)
+
+    mapInstanceRef.current = map
+    markersGroupRef.current = L.layerGroup().addTo(map)
+
+    return () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+        markersGroupRef.current = null
+      }
+    }
+  }, [mapLoaded, focusedPostId])
+
+  // Update markers on data change
+  useEffect(() => {
+    if (!mapInstanceRef.current || !markersGroupRef.current || !window.L) return
+    const L = window.L
+    const markersGroup = markersGroupRef.current
+
+    markersGroup.clearLayers()
+
+    filtered.forEach(post => {
+      if (post.lat && post.lng) {
+        const cat = CATEGORIES[post.category] || CATEGORIES['POTHOLE']
+        const color = cat.color || '#38bdf8'
+        const customHtml = `
+          <div style="
+            background: ${color};
+            width: 24px;
+            height: 24px;
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+          ">
+            <span style="transform: rotate(45deg); font-size: 11px;">${cat.icon || '◉'}</span>
+          </div>
+        `
+        const icon = L.divIcon({
+          html: customHtml,
+          className: 'custom-map-icon',
+          iconSize: [24, 24],
+          iconAnchor: [12, 24]
+        })
+
+        const marker = L.marker([post.lat, post.lng], { icon })
+          .bindPopup(`
+            <div style="color: #fff; font-family: sans-serif; font-size: 12px; padding: 2px; min-width: 160px;">
+              <div style="font-weight: bold; margin-bottom: 4px; color: ${color}">${cat.label}</div>
+              <div style="font-weight: 500; color: #cbd5e1; margin-bottom: 2px;">◉ ${post.ward}</div>
+              <div style="color: #94a3b8; font-size: 10px; margin-bottom: 6px;">MLA: ${post.mla}</div>
+              <p style="margin: 0; color: #e2e8f0; font-size: 11.5px; line-height: 1.4; max-height: 50px; overflow: hidden;">"${post.text.slice(0, 70)}..."</p>
+              <button onclick="window.focusComplaintCard('${post.id}')" style="
+                margin-top: 8px;
+                width: 100%;
+                background: ${color};
+                border: none;
+                color: #fff;
+                font-weight: bold;
+                padding: 4px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 10px;
+              ">Review Card</button>
+            </div>
+          `, {
+            closeButton: false,
+            className: 'custom-leaflet-popup'
+          })
+
+        markersGroup.addLayer(marker)
+      }
+    })
+
+    window.focusComplaintCard = (id) => {
+      const cardEl = document.getElementById(`post-card-${id}`)
+      if (cardEl) {
+        cardEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        cardEl.style.outline = '2px solid var(--accent)'
+        cardEl.style.boxShadow = '0 0 15px var(--accent-dim)'
+        setTimeout(() => {
+          cardEl.style.outline = 'none'
+          cardEl.style.boxShadow = 'none'
+        }, 3000)
+      }
+    }
+  }, [filtered])
+
+
 
   if (focusedPostId) {
+    if (loading) {
+      return (
+        <div className="livefeed" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+          <p style={{ color: '#94a3b8' }}>Loading review details...</p>
+        </div>
+      )
+    }
     const post = allPosts.find(p => p.id === focusedPostId)
     if (post) {
       return (
         <div className="livefeed">
           <FocusedReviewPanel
             post={post}
-            onBack={() => setFocusedPostId(null)}
+            onBack={() => {
+              setFocusedPostId(null)
+              setSearchParams({})
+            }}
             onStatusChange={(id, status) => {
               handleStatusChange(id, status)
               setFocusedPostId(null)
+              setSearchParams({})
             }}
           />
+        </div>
+      )
+    } else {
+      return (
+        <div className="livefeed">
+          <div className="focused-review-header" style={{ marginBottom: '2rem' }}>
+            <button className="back-feed-btn" onClick={() => setSearchParams({})}>
+              ← Back to Social Feed
+            </button>
+          </div>
+          <div style={{ textAlign: 'center', padding: '5rem 3rem', background: '#111827', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: '3rem', marginBottom: '1.5rem' }}>🔍</div>
+            <h3 style={{ color: '#fff', fontSize: '1.2rem', marginBottom: '0.5rem' }}>Post Not Found</h3>
+            <p style={{ color: '#94a3b8', fontSize: '0.9rem', maxWidth: '400px', margin: '0 auto' }}>
+              The post with ID <strong>{focusedPostId}</strong> could not be found. It may have been filtered out due to the 3-month age limit, flagged as spam, or deleted.
+            </p>
+          </div>
         </div>
       )
     }
@@ -460,6 +715,21 @@ export default function LiveFeed() {
         <div className="src-pill muted">{filtered.length} shown</div>
       </div>
 
+      {/* NammaKasa-style Interactive Map */}
+      <div className="livefeed-map-container" style={{
+        height: '340px',
+        width: '100%',
+        borderRadius: 'var(--radius-lg)',
+        border: '1px solid var(--border)',
+        overflow: 'hidden',
+        background: '#0b0f19',
+        marginBottom: '20px',
+        position: 'relative',
+        zIndex: 10
+      }}>
+        <div id="livefeed-leaflet-map" style={{ width: '100%', height: '100%' }} />
+      </div>
+
       <div className="feed-filters">
         <div className="filter-group">
           <input
@@ -479,6 +749,7 @@ export default function LiveFeed() {
           </select>
 
           <select className="filter-select" value={filterStat} onChange={e => setFilterStat(e.target.value)}>
+            <option value="unresolved">Unresolved Complaints</option>
             <option value="all">All Statuses</option>
             <option value="pending">Pending</option>
             <option value="reviewing">Reviewing</option>
@@ -500,6 +771,33 @@ export default function LiveFeed() {
               <option key={src} value={src}>{src}</option>
             ))}
           </select>
+ 
+          <label className="filter-checkbox-label" style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 'var(--radius-md)',
+            padding: '8px 12px',
+            fontSize: '12px',
+            fontFamily: 'var(--font-mono)',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            transition: 'var(--transition)',
+            userSelect: 'none'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
+          >
+            <input
+              type="checkbox"
+              checked={showNews}
+              onChange={e => setShowNews(e.target.checked)}
+              style={{ cursor: 'pointer', margin: 0 }}
+            />
+            <span>Include News Reports</span>
+          </label>
         </div>
 
         <div className="filter-group right">
