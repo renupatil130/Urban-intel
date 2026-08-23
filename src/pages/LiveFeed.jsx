@@ -452,12 +452,33 @@ export default function LiveFeed() {
   const markersGroupRef = useRef(null)
 
   const handleStatusChange = async (id, s) => {
+    let resolvedPhoto = null
+    if (s === 'resolved') {
+      const confirmPhoto = window.confirm("Would you like to upload a resolution photo as proof?")
+      if (confirmPhoto) {
+        const file = await new Promise((resolve) => {
+          const input = document.createElement('input')
+          input.type = 'file'
+          input.accept = 'image/*'
+          input.onchange = (e) => resolve(e.target.files[0])
+          input.click()
+        })
+        if (file) {
+          resolvedPhoto = await new Promise((resolve) => {
+            const reader = new FileReader()
+            reader.onloadend = () => resolve(reader.result)
+            reader.readAsDataURL(file)
+          })
+        }
+      }
+    }
+
     setStatusMap(p => ({ ...p, [id]: s }))
     try {
       await fetch(`${API_BASE}/api/feed/status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ postId: id, status: s })
+        body: JSON.stringify({ postId: id, status: s, resolvedPhoto })
       })
     } catch (err) {
       console.error('Failed to update status on server:', err)
@@ -679,7 +700,7 @@ export default function LiveFeed() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Live Social Feed</h1>
-          <p className="page-sub">Real-time civic issues from Reddit and Bluesky</p>
+          <p className="page-sub">Real-time civic issues from Reddit & Bluesky (Bengaluru) and Citizen Portal (Davangere)</p>
         </div>
         <div className="header-right-group">
           {newCount > 0 && (

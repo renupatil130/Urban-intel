@@ -43,14 +43,51 @@ export default function CitizenPortal() {
   const markerRef = useRef(null)
 
   const WARD_COORDINATES = useMemo(() => ({
-    'Ward 12 – Koramangala': { lat: 12.9352, lng: 77.6244 },
-    'Ward 7 – Indiranagar': { lat: 12.9719, lng: 77.6412 },
-    'Ward 23 – Jayanagar': { lat: 12.9308, lng: 77.5838 },
-    'Ward 45 – Whitefield': { lat: 12.9698, lng: 77.7499 },
-    'Ward 31 – HSR Layout': { lat: 12.9128, lng: 77.6388 },
-    'Ward 18 – Rajajinagar': { lat: 12.9882, lng: 77.5533 },
-    'Ward 56 – Hebbal': { lat: 13.0358, lng: 77.5970 },
-    'Ward 8 – MG Road': { lat: 12.9756, lng: 77.6068 }
+    'Ward 1 – Gandhi Nagar': { lat: 14.465, lng: 75.915 },
+    'Ward 2 – S.S.M and Mustafa Nagara': { lat: 14.468, lng: 75.918 },
+    'Ward 3 – Siddarameshwara Badavane, Mandakki Bhatti and BD Layout': { lat: 14.462, lng: 75.922 },
+    'Ward 4 – Basha Nagara': { lat: 14.459, lng: 75.913 },
+    'Ward 5 – Jagajeevan Rao Nagar, SPS Nagara 2nd Stage,Rajeev Gandhi Badavane & SPS Nagara 1st stage': { lat: 14.471, lng: 75.925 },
+    'Ward 6 – Kurubara Kere, Shibara and Vijaya nagara Badavane': { lat: 14.475, lng: 75.911 },
+    'Ward 7 – Jali nagara, Devaraj Urs Badavane B Block': { lat: 14.466, lng: 75.929 },
+    'Ward 8 – Suresh Nagara': { lat: 14.453, lng: 75.916 },
+    'Ward 9 – Azad Nagara': { lat: 14.461, lng: 75.920 },
+    'Ward 10 – Ganesh Pete': { lat: 14.457, lng: 75.923 },
+    'Ward 11 – Basavaraj Pete': { lat: 14.455, lng: 75.927 },
+    'Ward 12 – Ahmmed Nagara': { lat: 14.473, lng: 75.919 },
+    'Ward 13 – Carl marks nagara, Muddabhovi colony and Koracharahatti': { lat: 14.478, lng: 75.924 },
+    'Ward 14 – Chamaraja pete and Basavaraja pete': { lat: 14.451, lng: 75.914 },
+    'Ward 15 – Devraj urs badavane & Vinobha nagara': { lat: 14.482, lng: 75.931 },
+    'Ward 16 – Vinobha nagara': { lat: 14.484, lng: 75.933 },
+    'Ward 17 – P.J. Badavane': { lat: 14.469, lng: 75.928 },
+    'Ward 18 – Kaipete and M B kere': { lat: 14.463, lng: 75.935 },
+    'Ward 19 – Mandipete I Shekharappa Nagara': { lat: 14.460, lng: 75.938 },
+    'Ward 20 – Bharat Colony': { lat: 14.452, lng: 75.930 },
+    'Ward 21 – Basavapura': { lat: 14.449, lng: 75.926 },
+    'Ward 22 – Yallamma nagara': { lat: 14.446, lng: 75.922 },
+    'Ward 23 – Nijalingappa Badavane & S.S. Badavane "A" Block': { lat: 14.443, lng: 75.918 },
+    'Ward 24 – M.C.C. "A" Block, P.J. Badavane': { lat: 14.471, lng: 75.936 },
+    'Ward 25 – KB Badavane, DCM Quatrus': { lat: 14.458, lng: 75.942 },
+    'Ward 26 – KTJ Nagara-2': { lat: 14.467, lng: 75.945 },
+    'Ward 27 – KTJ Nagara-1': { lat: 14.469, lng: 75.947 },
+    'Ward 28 – Bhagat Singh Nagara': { lat: 14.474, lng: 75.950 },
+    'Ward 29 – Nittuvalli Anjaneya Layout and Srirama Badavane': { lat: 14.440, lng: 75.934 },
+    'Ward 30 – Avaragere and Goshale': { lat: 14.437, lng: 75.930 },
+    'Ward 31 – S.O.G Calony, Anajaneya Mill Badavane': { lat: 14.434, lng: 75.926 },
+    'Ward 32 – Nittuvalli Chikkanahalli Badavane': { lat: 14.442, lng: 75.938 },
+    'Ward 33 – Saraswati Badavane': { lat: 14.445, lng: 75.942 },
+    'Ward 34 – Shivakumaraswamy Layout': { lat: 14.448, lng: 75.946 },
+    'Ward 35 – Nittuvalli Hosa Badavane': { lat: 14.439, lng: 75.940 },
+    'Ward 36 – Lenin Nagara': { lat: 14.435, lng: 75.944 },
+    'Ward 37 – K.E.B Colony': { lat: 14.453, lng: 75.952 },
+    'Ward 38 – MCC \'B\' block': { lat: 14.475, lng: 75.938 },
+    'Ward 39 – Vidya nagara': { lat: 14.431, lng: 75.922 },
+    'Ward 40 – Anjeneya badavane': { lat: 14.428, lng: 75.918 },
+    'Ward 41 – Banashankari Badavane &  Budda Basava & Industrial Area': { lat: 14.425, lng: 75.914 },
+    'Ward 42 – Siddaveerappa Badavane': { lat: 14.433, lng: 75.910 },
+    'Ward 43 – Shamanuru & Hosa Kundavada': { lat: 14.430, lng: 75.906 },
+    'Ward 44 – S S Badavane B block Hale Kundavada Vinayaka Nagara & Shanthi Nagara': { lat: 14.436, lng: 75.912 },
+    'Ward 45 – S J M Nagara, Yaragunte, Karuru': { lat: 14.439, lng: 75.916 }
   }), [])
 
   // Load Leaflet resources dynamically
@@ -96,7 +133,7 @@ export default function CitizenPortal() {
   const initLeafletMap = () => {
     if (!mapRef.current || !window.L) return
     const L = window.L
-    const defaultCoords = WARD_COORDINATES[ward] || WARD_COORDINATES['Ward 12 – Koramangala']
+    const defaultCoords = WARD_COORDINATES[ward] || WARD_COORDINATES['Ward 1 – Gandhi Nagar']
     
     // Check if container already initialized
     const mapEl = mapRef.current
@@ -162,7 +199,7 @@ export default function CitizenPortal() {
   }
 
   const updateWardFromCoords = (lat, lng) => {
-    let closestWard = 'Ward 12 – Koramangala'
+    let closestWard = 'Ward 1 – Gandhi Nagar'
     let minDistance = Infinity
     
     for (const [wardName, coords] of Object.entries(WARD_COORDINATES)) {
@@ -355,6 +392,24 @@ export default function CitizenPortal() {
     }
   }
 
+  const handleDeleteComplaint = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this complaint? This cannot be undone.")) return
+    try {
+      const res = await fetch(`${API_BASE}/api/citizen/complaints/${id}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        setComplaints(prev => prev.filter(c => c.id !== id))
+        if (activeComplaintId === id) {
+          setActiveComplaintId(null)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete complaint:', err)
+    }
+  }
+
   const activeComplaints = useMemo(() => complaints.filter(c => c.status !== 'resolved'), [complaints])
   const resolvedComplaints = useMemo(() => complaints.filter(c => c.status === 'resolved'), [complaints])
 
@@ -368,7 +423,7 @@ export default function CitizenPortal() {
           <div className="auth-logo">
             <span className="auth-logo-icon">⬡</span>
             <h2>Citizen Complaint Portal</h2>
-            <p>Report neighborhood issues directly to Bengaluru local authorities</p>
+            <p>Report neighborhood issues directly to Davangere local authorities</p>
           </div>
 
           <form onSubmit={handleAuthSubmit} className="auth-form">
@@ -378,7 +433,7 @@ export default function CitizenPortal() {
                 <input
                   type="email"
                   required
-                  placeholder="name@bengaluru.com"
+                  placeholder="name@davangere.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                 />
@@ -432,7 +487,7 @@ export default function CitizenPortal() {
           <span className="brand-hex">⬡</span>
           <div>
             <h3>Citizen Portal</h3>
-            <p>UrbanIntel Bengaluru</p>
+            <p>UrbanIntel Davangere</p>
           </div>
         </div>
         <div className="portal-user-nav">
@@ -617,13 +672,28 @@ export default function CitizenPortal() {
                       <h4 className="complaint-text">{c.text.split(' — ')[0]}</h4>
                       <p className="complaint-subtext">{c.text.split(' — ')[1]?.slice(0, 80)}...</p>
                       
-                      <div className="card-meta">
+                      <div className="card-meta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                         <span>{catInfo.icon} {c.ward.split('–')[1]?.trim() || c.ward}</span>
-                        {msgCount > 0 && (
-                          <span className="chat-notification-indicator">
-                            ✉ {msgCount} update{msgCount > 1 ? 's' : ''}
-                          </span>
-                        )}
+                        <button 
+                          className="btn-delete-complaint"
+                          style={{
+                            background: 'var(--danger)',
+                            border: 'none',
+                            borderRadius: '4px',
+                            color: '#fff',
+                            fontSize: '10px',
+                            fontWeight: 'bold',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            zIndex: 10
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteComplaint(c.id);
+                          }}
+                        >
+                          Delete ✕
+                        </button>
                       </div>
                     </div>
                   )
@@ -643,10 +713,17 @@ export default function CitizenPortal() {
                 <button className="chat-close-btn" onClick={() => setActiveComplaintId(null)}>✕</button>
               </div>
 
-              {activeComplaint.photo && (
+               {activeComplaint.photo && (
                 <div className="chat-attachment-preview">
                   <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>Attached Evidence:</span>
                   <img src={activeComplaint.photo} alt="evidence preview" />
+                </div>
+              )}
+
+              {activeComplaint.resolvedPhoto && (
+                <div className="chat-attachment-preview" style={{ border: '2px solid var(--success)', padding: '8px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.05)', marginTop: '8px' }}>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--success)', fontWeight: 'bold', display: 'block', marginBottom: '4px' }}>✓ Resolution Proof attached by Officer:</span>
+                  <img src={activeComplaint.resolvedPhoto} alt="resolution proof" style={{ maxWidth: '100%', borderRadius: '4px' }} />
                 </div>
               )}
 

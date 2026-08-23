@@ -105,7 +105,7 @@ export default function Dashboard() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Intelligence Dashboard</h1>
-          <p className="page-sub">Real-time municipal issue monitoring · Bengaluru Urban District</p>
+          <p className="page-sub">Real-time municipal issue monitoring · Bengaluru (Social Feed) & Davangere (Citizen Portal)</p>
         </div>
         <div className="header-right">
           <div className="live-badge">
