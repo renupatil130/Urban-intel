@@ -31,3 +31,4 @@ dist-ssr/
 
 # Archive files
 *.zip
+.vercel
