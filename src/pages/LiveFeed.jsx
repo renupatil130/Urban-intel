@@ -36,7 +36,7 @@ function PostCard({ post, onStatusChange, onReviewClick }) {
   const srcColor = getSourceColor(post.source)
 
   return (
-    <div id={`post-card-${post.id}`} className={`post-card ${post.severity}`} style={{ scrollMargin: '120px' }}>
+    <div id={`post-card-${post.id}`} className={`post-card ${post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}`} style={{ scrollMargin: '120px' }}>
       <div className="post-card-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div className="post-meta-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="post-source-icon" style={{ color: srcColor }}>{getSourceIcon(post.source)}</span>
@@ -50,7 +50,7 @@ function PostCard({ post, onStatusChange, onReviewClick }) {
           ) : (
             <span className="badge" style={{ color: 'var(--text-muted)', border: '1px solid var(--border)', background: 'transparent' }}>DEMO</span>
           )}
-          <span className={`badge ${post.severity}`}>{post.severity}</span>
+          <span className={`badge ${post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}`}>{post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}</span>
           <span className={`badge ${post.status}`}>{post.status}</span>
         </div>
       </div>
@@ -99,7 +99,7 @@ function PostCard({ post, onStatusChange, onReviewClick }) {
         <span className="ai-label">AI</span>
         <span className="ai-text">
           {cat.label} in {post.ward}. Confidence {post.confidence}%.{' '}
-          {post.severity === 'critical' ? 'Immediate action required.' : post.severity === 'high' ? 'High priority.' : 'Routine attention.'}
+          {post.confidence >= 80 || post.severity === 'critical' ? 'Immediate action required.' : 'Routine attention.'}
           {!post.genuine && ' ⚠ Authenticity uncertain.'}
         </span>
       </div>
@@ -279,7 +279,7 @@ function FocusedReviewPanel({ post, onBack, onStatusChange }) {
               </div>
               <div className="meta-item">
                 <span className="meta-lbl">Severity Level</span>
-                <span className={`meta-val badge ${post.severity}`}>{post.severity}</span>
+                <span className={`meta-val badge ${post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}`}>{post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}</span>
               </div>
               <div className="meta-item">
                 <span className="meta-lbl">Confidence Score</span>
@@ -491,7 +491,10 @@ export default function LiveFeed() {
   const filtered = useMemo(() => {
     let r = [...allPosts]
     if (search)           r = r.filter(p => p.text.toLowerCase().includes(search.toLowerCase()) || p.ward?.toLowerCase().includes(search.toLowerCase()))
-    if (filterSev  !== 'all') r = r.filter(p => p.severity === filterSev)
+    if (filterSev  !== 'all') r = r.filter(p => {
+      const mappedSeverity = p.confidence >= 80 || p.severity === 'critical' ? 'critical' : 'low'
+      return mappedSeverity === filterSev
+    })
     if (filterStat === 'unresolved') {
       r = r.filter(p => (statusMap[p.id] || p.status) !== 'resolved')
     } else if (filterStat !== 'all') {
@@ -505,7 +508,14 @@ export default function LiveFeed() {
       r = r.filter(p => p.source !== 'News Reports')
     }
 
-    if (sortBy === 'severity') { const o = { critical:0,high:1,medium:2,low:3 }; r.sort((a,b)=>(o[a.severity]??4)-(o[b.severity]??4)) }
+    if (sortBy === 'severity') {
+      const o = { critical: 0, low: 1 }
+      r.sort((a, b) => {
+        const sevA = a.confidence >= 80 || a.severity === 'critical' ? 'critical' : 'low'
+        const sevB = b.confidence >= 80 || b.severity === 'critical' ? 'critical' : 'low'
+        return (o[sevA] ?? 2) - (o[sevB] ?? 2)
+      })
+    }
     else if (sortBy === 'confidence') r.sort((a,b) => b.confidence - a.confidence)
     else r.sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp))
     return r
@@ -764,8 +774,6 @@ export default function LiveFeed() {
           <select className="filter-select" value={filterSev} onChange={e => setFilterSev(e.target.value)}>
             <option value="all">All Severities</option>
             <option value="critical">Critical Only</option>
-            <option value="high">High Only</option>
-            <option value="medium">Medium Only</option>
             <option value="low">Low Only</option>
           </select>
 

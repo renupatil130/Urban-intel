@@ -20,28 +20,7 @@ export default function Analytics() {
   const { posts: livePosts } = useFeed()
   const posts = livePosts
 
-  // Dynamic KPI Metrics
-  const kpiData = useMemo(() => {
-    const total = posts.length || 1
-    const critical = posts.filter(p => p.severity === 'critical').length
-    
-    // Average AI Confidence
-    const avgAccuracy = Math.round(posts.reduce((a, p) => a + p.confidence, 0) / total)
-    
-    // Flagged (False positive) rate
-    const flagged = posts.filter(p => p.status === 'flagged').length
-    const fpRate = total > 0 ? ((flagged / total) * 100).toFixed(1) : '4.2'
 
-    // Latency variance based on critical load
-    const responseTime = (3.2 + (critical * 0.4)).toFixed(1)
-
-    return [
-      { label: 'Avg. Response Time', value: `${responseTime}h`, change: '-12%', color: 'var(--accent)' },
-      { label: 'Detection Accuracy', value: `${avgAccuracy}%`, change: '+2.4%', color: 'var(--success)' },
-      { label: 'False Positive Rate', value: `${fpRate}%`, change: '-1.8%', color: 'var(--warning)' },
-      { label: 'Daily Throughput', value: String(total), change: `+${Math.floor(total * 0.1)}`, color: 'var(--purple)' },
-    ]
-  }, [posts])
 
   // Hourly Report Volume derived from actual live timestamps
   const hourlyData = useMemo(() => {
@@ -56,7 +35,7 @@ export default function Analytics() {
       const h = date.getHours()
       if (h >= 0 && h < 24) {
         hours[h].reports += 1
-        if (p.severity === 'critical') {
+        if (p.confidence >= 80 || p.severity === 'critical') {
           hours[h].critical += 1
         }
       }
@@ -83,12 +62,30 @@ export default function Analytics() {
     ]
   }, [posts])
 
-  // Ward statistics based on live posts
-  const wardData = useMemo(() => {
+  // Bengaluru Ward statistics based on live posts
+  const bengaluruWardData = useMemo(() => {
     const counts = {}
     posts.forEach(p => { 
-      const w = p.ward?.split('–')[1]?.trim() || p.ward || 'Bengaluru'
-      counts[w] = (counts[w] || 0) + 1 
+      const isDvg = p.source === 'Citizen Portal' || p.source.toLowerCase().includes('davangere') || p.ward?.includes('Ward')
+      if (!isDvg) {
+        const w = p.ward?.split('–')[1]?.trim() || p.ward || 'Bengaluru'
+        counts[w] = (counts[w] || 0) + 1 
+      }
+    })
+    return Object.entries(counts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+  }, [posts])
+
+  // Davangere Ward statistics based on live posts
+  const davangereWardData = useMemo(() => {
+    const counts = {}
+    posts.forEach(p => { 
+      const isDvg = p.source === 'Citizen Portal' || p.source.toLowerCase().includes('davangere') || p.ward?.includes('Ward')
+      if (isDvg) {
+        const w = p.ward?.split('–')[1]?.trim() || p.ward || 'Davangere'
+        counts[w] = (counts[w] || 0) + 1 
+      }
     })
     return Object.entries(counts)
       .map(([name, count]) => ({ name, count }))
@@ -119,14 +116,7 @@ export default function Analytics() {
     })).sort((a, b) => b.count - a.count)
   }, [posts])
 
-  // Scatterplot mapping
-  const scatterData = useMemo(() => posts.slice(0, 40).map(p => ({
-    x: p.likes || 0,
-    y: p.confidence || 0,
-    severity: p.severity || 'low'
-  })), [posts])
 
-  const severityColorMap = { critical: CHART_COLORS.danger, high: CHART_COLORS.warning, medium: '#a78bfa', low: CHART_COLORS.success }
 
   return (
     <div className="analytics-page">
@@ -137,15 +127,6 @@ export default function Analytics() {
         </div>
       </div>
 
-      <div className="kpi-row">
-        {kpiData.map((kpi, i) => (
-          <div key={i} className="kpi-card" style={{ '--accent-color': kpi.color }}>
-            <span className="kpi-label">{kpi.label}</span>
-            <span className="kpi-val">{kpi.value}</span>
-            <span className="kpi-change" style={{ color: kpi.change.startsWith('+') || kpi.change.startsWith('-1') || kpi.change.startsWith('-2') ? 'var(--success)' : 'var(--danger)' }}>{kpi.change} vs last week</span>
-          </div>
-        ))}
-      </div>
 
       <div className="analytics-grid">
         {/* Hourly reports */}
@@ -163,16 +144,30 @@ export default function Analytics() {
           </ResponsiveContainer>
         </div>
 
-        {/* Ward distribution */}
+        {/* Bengaluru Ward distribution */}
         <div className="card">
-          <h3 className="chart-title">Reports by Ward</h3>
+          <h3 className="chart-title">Bengaluru Wards</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={wardData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+            <BarChart data={bengaluruWardData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,179,237,0.08)" horizontal={false} />
               <XAxis type="number" tick={{ fill: '#4b6282', fontSize: 10 }} axisLine={false} tickLine={false} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
               <Tooltip content={<CustomTooltip />} />
               <Bar dataKey="count" name="Reports" fill={CHART_COLORS.accent} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Davangere Ward distribution */}
+        <div className="card">
+          <h3 className="chart-title">Davangere Wards</h3>
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={davangereWardData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,179,237,0.08)" horizontal={false} />
+              <XAxis type="number" tick={{ fill: '#4b6282', fontSize: 10 }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+              <Tooltip content={<CustomTooltip />} />
+              <Bar dataKey="count" name="Reports" fill={CHART_COLORS.success} radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -215,32 +210,6 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Likes vs Confidence scatter */}
-        <div className="card">
-          <h3 className="chart-title">Engagement vs AI Confidence</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <ScatterChart margin={{ top: 10, right: 20, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(99,179,237,0.08)" />
-              <XAxis dataKey="x" name="Likes" type="number" tick={{ fill: '#4b6282', fontSize: 10 }} axisLine={false} tickLine={false} label={{ value: 'Likes', position: 'insideBottom', fill: '#4b6282', fontSize: 10 }} />
-              <YAxis dataKey="y" name="Confidence" type="number" tick={{ fill: '#4b6282', fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} content={({ active, payload }) => active && payload.length ? (
-                <div className="chart-tooltip"><p>Likes: {payload[0]?.value}</p><p>Conf: {payload[1]?.value}%</p></div>
-              ) : null} />
-              <Scatter data={scatterData} shape={(props) => {
-                const { cx, cy, payload } = props
-                return <circle cx={cx} cy={cy} r={5} fill={severityColorMap[payload.severity]} fillOpacity={0.7} />
-              }} />
-            </ScatterChart>
-          </ResponsiveContainer>
-          <div className="scatter-legend">
-            {Object.entries(severityColorMap).map(([k, v]) => (
-              <div key={k} className="sl-item">
-                <span className="sl-dot" style={{ background: v }} />
-                <span>{k}</span>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* Category breakdown */}
         <div className="card">

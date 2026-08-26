@@ -33,7 +33,7 @@ const cache = {
 const CACHE_TTL = 60 * 1000  // 60 seconds
 
 let systemConfig = {
-  thresholds: { critical: 80, high: 60, medium: 40, autoVerify: 90 },
+  thresholds: { critical: 80 },
   sources: { 'Reddit': true, 'News Reports': true, 'Bluesky': true },
   mapping: {
     POTHOLE: 'Roads & Infrastructure',
@@ -377,36 +377,22 @@ function classifyText(text) {
   }
 
   // ── Severity: accumulate points ──
-  let severityScore = 0
-  let severity = 'low'
-  for (const rule of SEVERITY_RULES) {
-    const matched = rule.patterns.filter(p => lower.includes(p)).length
-    severityScore += matched * rule.score
-  }
-  // Also boost severity if many negative words
-  const negativeWords = ['not working', 'broken', 'damaged', 'overflow', 'blocked', 'collapsed', 'burst', 'leak']
-  severityScore += negativeWords.filter(w => lower.includes(w)).length * 5
-
-  const critThreshold = (systemConfig?.thresholds?.critical ?? 80) * 0.375
-  const highThreshold = (systemConfig?.thresholds?.high ?? 60) * 0.33
-  const medThreshold  = (systemConfig?.thresholds?.medium ?? 40) * 0.25
-
-  if (severityScore >= critThreshold)      severity = 'critical'
-  else if (severityScore >= highThreshold) severity = 'high'
-  else if (severityScore >= medThreshold)  severity = 'medium'
-  else                                     severity = 'low'
-
   // ── Confidence: based on how many civic keywords matched ──
   const civicMatched = CIVIC_KEYWORDS.filter(k => lower.includes(k)).length
   const categoryMatched = Object.values(scores).reduce((a, b) => a + b, 0)
   const rawConf = Math.min(97, 40 + civicMatched * 5 + Math.min(categoryMatched, 30))
   const confidence = Math.round(rawConf)
 
+  // ── Severity: 50% and above is critical, below 50% is low ──
+  const threshold = systemConfig?.thresholds?.critical ?? 50
+  const severity = confidence >= threshold ? 'critical' : 'low'
+
   // ── Genuineness: needs at least 2 civic signals and no spam ──
   const spamSignals = ['buy now', 'click here', 'discount', 'offer', 'sale', 'free download',
                        'subscribe', 'follow me', 'link in bio', 'dm me', 'whatsapp me']
   const hasSpam = spamSignals.some(s => lower.includes(s))
   const genuine = civicMatched >= 2 && !hasSpam
+  
   let status = 'pending'
   if (confidence > 80) {
     status = 'verified'
@@ -1133,7 +1119,7 @@ app.get('/api/feed', async (req, res) => {
           authorName: 'Deccan Herald',
           text: 'Garbage pile-up continues to plague Mustafa Nagara residents as collection trucks delay schedules. Stench and health hazards rise.',
           category: 'GARBAGE',
-          severity: 'high',
+          severity: 'critical',
           confidence: 94,
           genuine: true,
           status: 'verified',
@@ -1148,7 +1134,7 @@ app.get('/api/feed', async (req, res) => {
           authorName: 'Davangere Civic Watch',
           text: 'No streetlights working on Suresh Nagar road for the past 3 days. Extremely risky for two-wheelers at night.',
           category: 'STREETLIGHT',
-          severity: 'high',
+          severity: 'critical',
           confidence: 90,
           genuine: true,
           status: 'pending',
@@ -1178,7 +1164,7 @@ app.get('/api/feed', async (req, res) => {
           authorName: 'PJ Badavane Walker',
           text: 'Illegal construction waste dumped on footpath of P.J. Badavane. Pedestrians forced to walk on the main road with heavy traffic.',
           category: 'ENCROACHMENT',
-          severity: 'medium',
+          severity: 'critical',
           confidence: 85,
           genuine: true,
           status: 'pending',
@@ -1193,7 +1179,7 @@ app.get('/api/feed', async (req, res) => {
           authorName: 'Bangalore Mirror',
           text: 'Water pipeline leak reported near Vidya nagara, wasting thousands of liters of clean drinking water.',
           category: 'WATER',
-          severity: 'high',
+          severity: 'critical',
           confidence: 95,
           genuine: true,
           status: 'verified',

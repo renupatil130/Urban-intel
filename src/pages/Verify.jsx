@@ -7,16 +7,6 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 function VerifyCard({ post, onAction }) {
   const cat = CATEGORIES[post.category] || CATEGORIES['POTHOLE']
-  const signals = [
-    { label: 'Profile Age', score: Math.floor(40 + Math.random() * 60), positive: true },
-    { label: 'Post History', score: Math.floor(50 + Math.random() * 50), positive: true },
-    { label: 'Engagement Rate', score: Math.floor(30 + Math.random() * 70), positive: true },
-    { label: 'Spam Pattern', score: Math.floor(10 + Math.random() * 40), positive: false },
-    { label: 'Duplicate Content', score: Math.floor(5 + Math.random() * 30), positive: false },
-    { label: 'Bot Probability', score: Math.floor(5 + Math.random() * 25), positive: false },
-  ]
-  const genuineScore = Math.round((signals.filter(s => s.positive).reduce((a, s) => a + s.score, 0) / 3 + (100 - signals.filter(s => !s.positive).reduce((a, s) => a + s.score, 0) / 3)) / 2)
-  const isGenuine = genuineScore > 60
 
   return (
     <div className="verify-card">
@@ -26,40 +16,21 @@ function VerifyCard({ post, onAction }) {
           <span className="verify-author">{post.author}</span>
           <span className="verify-source">{post.source}</span>
         </div>
-        <div className="verify-score-big" style={{ color: isGenuine ? 'var(--success)' : 'var(--danger)' }}>
-          <span className="score-num">{genuineScore}</span>
-          <span className="score-label">/ 100</span>
-        </div>
       </div>
 
       <div className="verify-text">
-        <span style={{ color: cat.color }}>{cat.icon}</span>
-        <p>{post.text.slice(0, 120)}…</p>
+        <span style={{ color: cat.color }} className="verify-icon">{cat.icon}</span>
+        <p>{post.text}</p>
       </div>
 
-      <div className="verify-signals">
-        {signals.map((sig, i) => (
-          <div key={i} className="signal-row">
-            <span className="signal-label">{sig.label}</span>
-            <div className="signal-bar">
-              <div
-                className="signal-fill"
-                style={{
-                  width: `${sig.score}%`,
-                  background: sig.positive ? (sig.score > 60 ? 'var(--success)' : 'var(--warning)') : (sig.score < 20 ? 'var(--success)' : sig.score < 40 ? 'var(--warning)' : 'var(--danger)')
-                }}
-              />
-            </div>
-            <span className="signal-val">{sig.score}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="verify-footer">
-        <div className={`verify-verdict ${isGenuine ? 'genuine' : 'suspicious'}`}>
-          {isGenuine ? '✓ Likely Genuine' : '⚠ Possibly Suspicious'}
+      {post.photo && (
+        <div className="verify-photo" style={{ margin: '12px 0' }}>
+          <img src={post.photo} alt="Evidence" style={{ width: '100%', borderRadius: '4px', maxHeight: '180px', objectFit: 'cover' }} />
         </div>
-        <div className="verify-actions">
+      )}
+
+      <div className="verify-footer" style={{ borderTop: 'none', paddingTop: 0 }}>
+        <div className="verify-actions" style={{ width: '100%', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
           <button className="post-btn verify" onClick={() => onAction(post.id, 'verified')}>Verify</button>
           <button className="post-btn flag" onClick={() => onAction(post.id, 'flagged')}>Flag</button>
         </div>
@@ -120,18 +91,6 @@ export default function Verify() {
         </div>
       </div>
 
-      <div className="verify-pipeline">
-        <div className="pipeline-label">Verification Pipeline</div>
-        <div className="pipeline-steps">
-          {['Source Check', 'Profile Analysis', 'Content Scan', 'Duplication Check', 'Bot Detection', 'Final Score'].map((s, i) => (
-            <div key={i} className="pip-step">
-              <div className="pip-dot" style={{ background: 'var(--success)' }} />
-              <span>{s}</span>
-              {i < 5 && <div className="pip-line" />}
-            </div>
-          ))}
-        </div>
-      </div>
 
       {loading && pendingPosts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: '#94a3b8' }}>

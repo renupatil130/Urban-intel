@@ -37,11 +37,10 @@ export default function Dashboard() {
 
   const stats = useMemo(() => {
     const total = posts.length
-    const verified = posts.filter(p => p.status === 'verified').length
-    const critical = posts.filter(p => p.severity === 'critical').length
-    const pending = posts.filter(p => p.status === 'pending' || p.status === 'reviewing').length
-    const avgConfidence = total > 0 ? Math.round(posts.reduce((a, p) => a + p.confidence, 0) / total) : 0
-    return { total, verified, critical, pending, avgConfidence }
+    const critical = posts.filter(p => p.confidence >= 80 || p.severity === 'critical').length
+    const bengaluruCount = posts.filter(p => p.source !== 'Citizen Portal').length
+    const davangereCount = posts.filter(p => p.source === 'Citizen Portal').length
+    return { total, critical, bengaluruCount, davangereCount }
   }, [posts])
 
   // Compute weekly trend dynamically based on actual post timestamps
@@ -84,10 +83,8 @@ export default function Dashboard() {
   }, [posts])
 
   const severityData = useMemo(() => [
-    { name: 'Critical', value: posts.filter(p => p.severity === 'critical').length, color: CHART_COLORS.danger },
-    { name: 'High', value: posts.filter(p => p.severity === 'high').length, color: CHART_COLORS.warning },
-    { name: 'Medium', value: posts.filter(p => p.severity === 'medium').length, color: CHART_COLORS.purple },
-    { name: 'Low', value: posts.filter(p => p.severity === 'low').length, color: CHART_COLORS.success },
+    { name: 'Critical', value: posts.filter(p => p.confidence >= 80 || p.severity === 'critical').length, color: CHART_COLORS.danger },
+    { name: 'Low', value: posts.filter(p => p.confidence < 80 || p.severity === 'low').length, color: CHART_COLORS.success },
   ], [posts])
 
   // Sort recent alerts correctly by their true timestamp
@@ -136,27 +133,19 @@ export default function Dashboard() {
         </div>
         <div className="stat-card success">
           <div className="stat-top">
-            <span className="stat-label">Verified Reports</span>
-            <span className="stat-icon">◎</span>
+            <span className="stat-label">Bengaluru Complaints</span>
+            <span className="stat-icon">🏙️</span>
           </div>
-          <div className="stat-value">{stats.verified}</div>
-          <div className="stat-sub">{stats.total > 0 ? Math.round(stats.verified / stats.total * 100) : 0}% verification rate</div>
+          <div className="stat-value">{stats.bengaluruCount}</div>
+          <div className="stat-sub">Social Feed & News</div>
         </div>
         <div className="stat-card warning">
           <div className="stat-top">
-            <span className="stat-label">Pending Review</span>
-            <span className="stat-icon">◇</span>
+            <span className="stat-label">Davangere Complaints</span>
+            <span className="stat-icon">🏛️</span>
           </div>
-          <div className="stat-value">{stats.pending}</div>
-          <div className="stat-sub">Awaiting classification</div>
-        </div>
-        <div className="stat-card purple">
-          <div className="stat-top">
-            <span className="stat-label">AI Confidence</span>
-            <span className="stat-icon">⬡</span>
-          </div>
-          <div className="stat-value">{stats.avgConfidence}%</div>
-          <div className="stat-sub">Average model accuracy</div>
+          <div className="stat-value">{stats.davangereCount}</div>
+          <div className="stat-sub">Citizen Portal Reports</div>
         </div>
       </div>
 
@@ -256,7 +245,7 @@ export default function Dashboard() {
                 <div className="recent-content">
                   <div className="recent-top">
                     <span className="recent-id">{post.id}</span>
-                    <span className={`badge ${post.severity}`}>{post.severity}</span>
+                    <span className={`badge ${post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}`}>{post.confidence >= 80 || post.severity === 'critical' ? 'critical' : 'low'}</span>
                   </div>
                   <p className="recent-text">{post.text.slice(0, 72)}…</p>
                   <div className="recent-meta">

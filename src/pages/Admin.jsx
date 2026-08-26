@@ -104,7 +104,7 @@ export default function Admin() {
     const mockWards = ['Koramangala', 'Indiranagar', 'HSR Layout', 'Whitefield']
     const selectedCategory = mockCategories[Math.floor(Math.random() * mockCategories.length)]
     const selectedWard = mockWards[Math.floor(Math.random() * mockWards.length)]
-    const severity = Math.random() > 0.5 ? 'critical' : 'high'
+    const severity = Math.random() > 0.5 ? 'critical' : 'low'
 
     try {
       const res = await fetch(`${API_BASE}/api/feed/simulate`, {
@@ -140,7 +140,7 @@ export default function Admin() {
     }
   }
 
-  const [thresholds, setThresholds] = useState({ critical: 80, high: 60, medium: 40, autoVerify: 90 })
+  const [thresholds, setThresholds] = useState({ critical: 50, autoVerify: 90 })
   const [sources, setSources] = useState({ 'Reddit': true, 'News Reports': true, 'Bluesky': true })
   const [mapping, setMapping] = useState({
     POTHOLE: 'Roads & Infrastructure',
@@ -288,26 +288,26 @@ export default function Admin() {
           <div className="admin-section-title">◎ Severity Thresholds</div>
           <div className="threshold-list">
             {[
-              { key: 'critical', label: 'Critical', color: 'var(--danger)' },
-              { key: 'high', label: 'High Priority', color: 'var(--warning)' },
-              { key: 'medium', label: 'Medium', color: 'var(--purple)' },
-              { key: 'autoVerify', label: 'Auto-Verify Confidence', color: 'var(--success)' },
+              { key: 'critical', label: 'Critical Threshold', color: 'var(--danger)' },
             ].map(({ key, label, color }) => (
               <div key={key} className="threshold-item">
                 <div className="threshold-header">
                   <span className="threshold-label">{label}</span>
-                  <span className="threshold-val" style={{ color }}>{thresholds[key]}%</span>
+                  <span className="threshold-val" style={{ color }}>{thresholds.critical}%</span>
                 </div>
                 <input
                   type="range"
                   min={0} max={100}
-                  value={thresholds[key]}
-                  onChange={e => setThresholds(p => ({ ...p, [key]: +e.target.value }))}
+                  value={thresholds.critical}
+                  onChange={e => setThresholds(p => ({ ...p, critical: +e.target.value }))}
                   className="threshold-slider"
                   style={{ '--accent': color }}
                 />
                 <div className="threshold-ticks">
                   <span>0%</span><span>50%</span><span>100%</span>
+                </div>
+                <div className="threshold-desc" style={{ fontSize: '10.5px', color: '#64748b', marginTop: '6px', fontFamily: 'var(--font-mono)' }}>
+                  Confidence at or above {thresholds.critical}% is Critical. Below is Low.
                 </div>
               </div>
             ))}

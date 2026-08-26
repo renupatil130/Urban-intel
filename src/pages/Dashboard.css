@@ -8,7 +8,7 @@
 .live-dot-sm { width: 6px; height: 6px; background: var(--success); border-radius: 50%; animation: pulse-dot 1.2s ease-in-out infinite; }
 .timestamp { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
 
-.stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; }
+.stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
 .stat-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; position: relative; overflow: hidden; transition: var(--transition); }
 .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: currentColor; opacity: 0.5; }
 .stat-card.accent { color: var(--accent); }
@@ -56,6 +56,6 @@
 .recent-meta { display: flex; gap: 6px; font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 
 @media (max-width: 1280px) {
-  .stats-grid { grid-template-columns: repeat(3, 1fr); }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .charts-row, .bottom-row { grid-template-columns: 1fr; }
 }
