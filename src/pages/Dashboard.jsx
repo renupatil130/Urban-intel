@@ -38,8 +38,12 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     const total = posts.length
     const critical = posts.filter(p => p.confidence >= 80 || p.severity === 'critical').length
-    const bengaluruCount = posts.filter(p => p.source !== 'Citizen Portal').length
-    const davangereCount = posts.filter(p => p.source === 'Citizen Portal').length
+    const davangereCount = posts.filter(p => 
+      p.source === 'Citizen Portal' || 
+      p.source.toLowerCase().includes('davangere') || 
+      p.ward?.includes('Ward')
+    ).length
+    const bengaluruCount = total - davangereCount
     return { total, critical, bengaluruCount, davangereCount }
   }, [posts])
 
