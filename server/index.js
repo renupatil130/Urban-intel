@@ -49,6 +49,30 @@ let systemConfig = {
 
 // Citizen Portal In-Memory DB
 const USERS_CSV_PATH = join(__dirname, 'users.csv')
+const MESSAGES_JSON_PATH = join(__dirname, 'messages.json')
+
+function loadAdminMessagesFromFile() {
+  try {
+    if (!fs.existsSync(MESSAGES_JSON_PATH)) return {}
+    const raw = fs.readFileSync(MESSAGES_JSON_PATH, 'utf-8').trim()
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    const totalMsgs = Object.values(parsed).reduce((a, arr) => a + arr.length, 0)
+    console.log(`[Messages] Loaded ${totalMsgs} persistent messages from messages.json`)
+    return parsed
+  } catch (err) {
+    console.error('[Messages Load Error]:', err.message)
+    return {}
+  }
+}
+
+function saveAdminMessagesToFile() {
+  try {
+    fs.writeFileSync(MESSAGES_JSON_PATH, JSON.stringify(adminMessages, null, 2), 'utf-8')
+  } catch (err) {
+    console.error('[Messages Save Error]:', err.message)
+  }
+}
 
 function loadCitizenUsersFromCSV() {
   try {
@@ -218,7 +242,7 @@ function saveCurrentFeedToCSV() {
 }
 
 let citizenComplaints = loadCitizenComplaintsFromCSV()
-let adminMessages = {} // keyed by complaintId -> array of message objects { text, timestamp, sender }
+let adminMessages = loadAdminMessagesFromFile() // keyed by complaintId -> array of message objects { text, timestamp, sender }
 
 // ─────────────────────────────────────────────
 //  NLP Classification Engine (weighted scoring)
@@ -1402,6 +1426,9 @@ app.post('/api/feed/message', (req, res) => {
   
   adminMessages[complaintId].push(newMsg)
   
+  // Persist messages immediately so they survive restarts
+  saveAdminMessagesToFile()
+  
   // Update replies count on the post
   const post = citizenComplaints.find(c => c.id === complaintId)
   if (post) {
@@ -1435,6 +1462,7 @@ app.post('/api/feed/status', (req, res) => {
       citizenPost.resolvedPhoto = resolvedPhoto
     }
     saveCurrentFeedToCSV()
+    saveAdminMessagesToFile() // keep messages in sync
   }
   
   // Also update in caches so current feed fetch reflects it
