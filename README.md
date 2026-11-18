@@ -190,6 +190,23 @@ Response:
 4. Set environment variable: `TWITTER_BEARER_TOKEN=your_token`
 5. Deploy → get a URL like `https://urban-intel.railway.app`
 
+### Keep data after Render restarts (MongoDB)
+
+Render's free tier has a temporary disk: every restart, redeploy or spin-down
+(after ~15 minutes idle) wipes `users.csv`, `complaints.csv` and `messages.json`,
+so registered citizens, their complaints and chats disappear.
+
+To keep them, give the backend a free MongoDB database:
+
+1. Create a free cluster at https://www.mongodb.com/atlas
+2. Database Access → add a user; Network Access → allow `0.0.0.0/0`
+3. Copy the connection string (`mongodb+srv://...`)
+4. On Render → your service → Environment, add `MONGODB_URI=<that string>`
+   (optional: `MONGODB_DB=urbanintel`, `FRONTEND_URL=https://urban-intel-virid.vercel.app`)
+5. Redeploy. `/api/status` should now show `"storage": "mongodb"`.
+
+Without `MONGODB_URI` the server still runs using local files.
+
 ### Frontend → Vercel (Free)
 
 1. Create `.env` in project root:

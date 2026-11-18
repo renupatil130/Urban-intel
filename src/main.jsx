@@ -38,6 +38,9 @@ window.addEventListener('unhandledrejection', (event) => {
 });
 
 
+// Wake the backend (Render free tier sleeps when idle) as soon as the page opens
+fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/status`).catch(() => {})
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>

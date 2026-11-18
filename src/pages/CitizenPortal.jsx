@@ -221,11 +221,26 @@ export default function CitizenPortal() {
 
   const chatEndRef = useRef(null)
 
+  // A saved login can outlive the account on the server (e.g. after a backend
+  // reset). Check it once and sign out cleanly if the server no longer knows it.
+  useEffect(() => {
+    if (!user) return
+    fetch(`${API_BASE}/api/citizen/me?userId=${encodeURIComponent(user.id)}`)
+      .then(res => {
+        if (res.status === 404) {
+          localStorage.removeItem('citizen_user')
+          setUser(null)
+          setAuthError('Your session has expired. Please sign in again.')
+        }
+      })
+      .catch(() => {})
+  }, [user?.id])
+
   // Fetch user complaints
   const fetchComplaints = () => {
     if (!user) return
     setLoadingComplaints(true)
-    fetch(`${API_BASE}/api/citizen/complaints?userId=${user.id}`)
+    fetch(`${API_BASE}/api/citizen/complaints?userId=${encodeURIComponent(user.id)}`)
       .then(res => res.json())
       .then(data => {
         if (data.success) {
@@ -269,11 +284,21 @@ export default function CitizenPortal() {
     const body = isRegister ? { username, password, email } : { username, password }
 
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      })
+      const slowHint = setTimeout(() => setAuthError('Waking up the server, this can take up to a minute…'), 5000)
+      let res
+      try {
+        res = await fetch(`${API_BASE}${endpoint}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(90_000)
+        })
+      } catch {
+        throw new Error('Could not reach the server. Please try again in a minute.')
+      } finally {
+        clearTimeout(slowHint)
+        setAuthError('')
+      }
       const data = await res.json()
       if (!res.ok || !data.success) {
         throw new Error(data.error || 'Authentication failed')

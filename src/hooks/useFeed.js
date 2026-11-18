@@ -16,7 +16,14 @@ export function useFeed() {
   const fetchFeed = useCallback(async (force = false) => {
     try {
       const url = `${API_BASE}/api/feed${force ? '?refresh=true' : ''}`
-      const res = await fetch(url, { signal: AbortSignal.timeout(25_000) })
+      // The Render free tier sleeps when idle and needs up to ~60s to wake up,
+      // so allow a long timeout and retry once before showing "offline".
+      let res
+      try {
+        res = await fetch(url, { signal: AbortSignal.timeout(70_000) })
+      } catch {
+        res = await fetch(url, { signal: AbortSignal.timeout(70_000) })
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const json = await res.json()
 

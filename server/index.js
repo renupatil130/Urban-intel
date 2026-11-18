@@ -5,6 +5,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import fs from 'fs'
+import { initStore, storeEnabled, loadCollection, syncCollection, loadMessages, syncMessages } from './store.js'
 
 // Always resolve .env relative to THIS file, not the working directory
 const __filename = fileURLToPath(import.meta.url)
@@ -72,6 +73,7 @@ function saveAdminMessagesToFile() {
   } catch (err) {
     console.error('[Messages Save Error]:', err.message)
   }
+  syncMessages(adminMessages)
 }
 
 function loadCitizenUsersFromCSV() {
@@ -109,7 +111,7 @@ function saveCitizenUsersToCSV() {
     const headers = ['id', 'username', 'email', 'password']
     const csvLines = [headers.join(',')]
     for (const u of citizenUsers) {
-      const row = headers.map(header => u[header] || '')
+      const row = headers.map(header => String(u[header] || '').replace(/[,\r\n]/g, ' '))
       csvLines.push(row.join(','))
     }
     fs.writeFileSync(USERS_CSV_PATH, csvLines.join('\n'), 'utf-8')
@@ -117,6 +119,7 @@ function saveCitizenUsersToCSV() {
   } catch (err) {
     console.error('[CSV Users Save Error]:', err.message)
   }
+  syncCollection('users', citizenUsers)
 }
 
 let citizenUsers = loadCitizenUsersFromCSV()
@@ -197,7 +200,7 @@ function saveAllComplaintsToCSV(posts) {
         if (val === undefined || val === null) {
           return '';
         }
-        let strVal = String(val).replace(/"/g, '""');
+        let strVal = String(val).replace(/\r?\n/g, ' ').replace(/"/g, '""');
         if (strVal.includes(',') || strVal.includes('\n') || strVal.includes('"')) {
           return `"${strVal}"`;
         }
@@ -239,6 +242,7 @@ function saveCurrentFeedToCSV() {
   const combinedFiltered = combined.filter(p => !p.timestamp || new Date(p.timestamp).getTime() >= threeMonthsAgo)
 
   saveAllComplaintsToCSV(combinedFiltered)
+  syncCollection('complaints', citizenComplaints)
 }
 
 let citizenComplaints = loadCitizenComplaintsFromCSV()
@@ -1057,9 +1061,9 @@ app.get('/', (req, res) => {
       <body>
         <div class="card">
           <h1>UrbanIntel Backend is Online</h1>
-          <p>This is the Node.js/Express API backend running on port <code>3001</code>.</p>
-          <p>To view the user interface, please open the frontend server at:</p>
-          <h2><a href="http://localhost:5173/" target="_blank">http://localhost:5173</a></h2>
+          <p>This is the Node.js/Express API backend. Storage: <code>${storeEnabled() ? 'MongoDB (persistent)' : 'local files (temporary)'}</code></p>
+          <p>To view the user interface, open the frontend:</p>
+          <h2><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}" target="_blank">${process.env.FRONTEND_URL || 'http://localhost:5173'}</a></h2>
         </div>
       </body>
     </html>
@@ -1299,6 +1303,7 @@ app.get('/api/status', (req, res) => {
       cached: cache.bluesky.data.length,
       lastFetch: cache.bluesky.lastFetch ? new Date(cache.bluesky.lastFetch).toISOString() : null
     },
+    storage: storeEnabled() ? 'mongodb' : 'local-files',
     cacheTTL: `${CACHE_TTL / 1000}s`,
     uptime: Math.round(process.uptime()) + 's'
   })
@@ -1336,6 +1341,13 @@ app.post('/api/citizen/register', (req, res) => {
   citizenUsers.push(newUser)
   saveCitizenUsersToCSV()
   res.json({ success: true, user: { id: newUser.id, username: newUser.username, email: newUser.email } })
+})
+
+// Check a saved session (the frontend keeps the user in localStorage)
+app.get('/api/citizen/me', (req, res) => {
+  const user = citizenUsers.find(u => u.id === req.query.userId)
+  if (!user) return res.status(404).json({ success: false, error: 'Session expired, please sign in again' })
+  res.json({ success: true, user: { id: user.id, username: user.username, email: user.email } })
 })
 
 // Login Citizen
@@ -1546,6 +1558,27 @@ app.post('/api/feed/simulate', (req, res) => {
 // ─────────────────────────────────────────────
 //  Start server
 // ─────────────────────────────────────────────
+async function loadPersistentData() {
+  if (!(await initStore())) return
+  try {
+    const [users, complaints, messages] = await Promise.all([
+      loadCollection('users'), loadCollection('complaints'), loadMessages()
+    ])
+    // First run with MongoDB: upload whatever the local files had
+    if (users.length === 0 && citizenUsers.length > 0) syncCollection('users', citizenUsers)
+    else citizenUsers = users
+    if (complaints.length === 0 && citizenComplaints.length > 0) syncCollection('complaints', citizenComplaints)
+    else citizenComplaints = complaints
+    if (Object.keys(messages).length === 0 && Object.keys(adminMessages).length > 0) syncMessages(adminMessages)
+    else adminMessages = messages
+    console.log(`[Store] Loaded ${citizenUsers.length} users, ${citizenComplaints.length} complaints, ${Object.keys(adminMessages).length} chats from MongoDB`)
+  } catch (err) {
+    console.error('[Store] Failed to load data from MongoDB:', err.message)
+  }
+}
+
+await loadPersistentData()
+
 app.listen(PORT, () => {
   // Initialize with empty cache (will crawl real data on request)
   cache.reddit.data = []
