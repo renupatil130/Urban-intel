@@ -559,10 +559,10 @@ export default function LiveFeed() {
       zoomControl: false
     }).setView([12.9716, 77.5946], 11.5)
 
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-      attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-      subdomains: 'abcd',
-      maxZoom: 20
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors',
+      className: 'osm-tiles',
+      maxZoom: 19
     }).addTo(map)
 
     L.control.zoom({ position: 'bottomright' }).addTo(map)

@@ -142,11 +142,13 @@ export default function CitizenPortal() {
     try {
       const map = L.map(mapRef.current, {
         zoomControl: false,
-        attributionControl: false
+        attributionControl: true
       }).setView([defaultCoords.lat, defaultCoords.lng], 13)
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        maxZoom: 20
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        className: 'osm-tiles',
+        maxZoom: 19
       }).addTo(map)
 
       L.control.zoom({ position: 'bottomright' }).addTo(map)

@@ -196,3 +196,9 @@ input, select, textarea { font-family: var(--font-sans); }
   color: var(--accent);
   font-family: var(--font-mono);
 }
+
+/* Map tiles: free OpenStreetMap tiles (no API key). In dark mode, invert them
+   so the map matches the dark UI; light mode shows the normal map. */
+:root:not([data-theme='light']) .osm-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.9) saturate(0.6);
+}
